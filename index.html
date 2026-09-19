@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Folgen-Finder</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5a9fcf">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Folgen-Finder">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    box-sizing:border-box;
+    --snow:#eef4f8;
+    --snow2:#dde9f1;
+    --sky:#8fc7e8;
+    --sky-deep:#5a9fcf;
+    --ink:#20242a;
+    --paper:#fffdf7;
+    --cartman-red:#d5432c;
+    --cartman-yellow:#f2b632;
+    --stan-blue:#3a6ea5;
+    --kyle-green:#5a8f4f;
+    --kyle-orange:#e07b2c;
+    --kenny-orange:#e8722c;
+    --line:#20242a;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--snow);
+    color:var(--ink);
+    font-family:'Nunito',sans-serif;
+    background-image:
+      radial-gradient(circle at 12% 8%, #ffffffaa 0, transparent 40%),
+      linear-gradient(180deg, var(--snow) 0%, var(--snow2) 100%);
+  }
+  h1,h2,h3,.display{
+    font-family:'Baloo 2', sans-serif;
+    font-weight:800;
+    letter-spacing:.2px;
+  }
+
+  /* ---------- torn paper edge ---------- */
+  .torn-bottom{
+    position:relative;
+  }
+  .torn-bottom::after{
+    content:"";
+    position:absolute;
+    left:0;right:0;bottom:-14px;
+    height:16px;
+    background:
+      linear-gradient(135deg, transparent 50%, var(--snow) 50%) 0 0/16px 16px repeat-x,
+      linear-gradient(-135deg, transparent 50%, var(--snow) 50%) 0 0/16px 16px repeat-x;
+    background-position: 0 0, 8px 0;
+  }
+
+  /* ---------- header / mountains ---------- */
+  header{
+    position:relative;
+    padding: calc(28px + env(safe-area-inset-top,0px)) 20px 60px;
+    background: linear-gradient(180deg, var(--sky-deep) 0%, var(--sky) 65%, #bfe0f2 100%);
+    overflow:hidden;
+    border-bottom:5px solid var(--line);
+  }
+  .mtn{
+    position:absolute;
+    bottom:-6px;
+    width:100%;
+    left:0;
+  }
+  .mtn svg{display:block;width:100%;height:auto;}
+  .header-inner{
+    position:relative;
+    z-index:3;
+    max-width:760px;
+    margin:0 auto;
+    text-align:center;
+  }
+  .badge{
+    display:inline-block;
+    background:var(--paper);
+    border:3px solid var(--line);
+    border-radius:999px;
+    padding:5px 16px;
+    font-weight:800;
+    font-size:.78rem;
+    letter-spacing:.5px;
+    color:var(--cartman-red);
+    transform:rotate(-2deg);
+    box-shadow:3px 3px 0 var(--line);
+    margin-bottom:16px;
+  }
+  h1{
+    color:var(--paper);
+    font-size:clamp(2.1rem, 7vw, 3.6rem);
+    margin:0 0 10px;
+    text-shadow: 3px 3px 0 var(--line), -1px -1px 0 var(--line), 1px -1px 0 var(--line), -1px 1px 0 var(--line);
+    line-height:1.05;
+  }
+  header p.sub{
+    color:var(--ink);
+    font-weight:700;
+    max-width:520px;
+    margin:0 auto;
+    font-size:1.02rem;
+    background:var(--paper);
+    display:inline-block;
+    padding:8px 16px;
+    border:3px solid var(--line);
+    border-radius:14px;
+    box-shadow:3px 3px 0 var(--line);
+    transform:rotate(.6deg);
+  }
+
+  /* ---------- search ---------- */
+  .search-wrap{
+    max-width:640px;
+    margin:-34px auto 0;
+    padding:0 20px;
+    position:relative;
+    z-index:5;
+  }
+  .search-box{
+    background:var(--paper);
+    border:4px solid var(--line);
+    border-radius:20px;
+    box-shadow:6px 6px 0 var(--line);
+    padding:8px 8px 8px 20px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .search-box svg{flex:0 0 auto;}
+  #search{
+    flex:1;
+    border:none;
+    outline:none;
+    background:transparent;
+    font-family:'Nunito',sans-serif;
+    font-weight:700;
+    font-size:1.05rem;
+    color:var(--ink);
+    padding:12px 0;
+    min-width:0;
+  }
+  #search::placeholder{color:#8b93a1; font-weight:600;}
+  #clearBtn{
+    border:2px solid var(--line);
+    background:var(--cartman-yellow);
+    border-radius:10px;
+    width:34px;height:34px;
+    display:none;
+    align-items:center;justify-content:center;
+    cursor:pointer;
+    font-weight:800;
+    flex:0 0 auto;
+  }
+  #clearBtn.show{display:flex;}
+
+  /* quick chips */
+  .chips{
+    max-width:640px;
+    margin:16px auto 0;
+    padding:0 20px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    justify-content:center;
+  }
+  .chip{
+    border:2.5px solid var(--line);
+    background:var(--paper);
+    border-radius:999px;
+    padding:6px 13px;
+    font-weight:700;
+    font-size:.85rem;
+    cursor:pointer;
+    box-shadow:2px 2px 0 var(--line);
+    transition:transform .1s ease;
+    white-space:nowrap;
+  }
+  .chip:hover{transform:translateY(-2px);}
+  .chip:active{transform:translateY(0);}
+  .chip.c1{background:#f7d9d0;}
+  .chip.c2{background:#d9ecf7;}
+  .chip.c3{background:#dcecd3;}
+  .chip.c4{background:#fbe6bd;}
+
+  /* ---------- results ---------- */
+  main{
+    max-width:900px;
+    margin:0 auto;
+    padding:28px 18px 70px;
+  }
+  #resultMeta{
+    text-align:center;
+    font-weight:700;
+    color:#4a5568;
+    margin-bottom:16px;
+    font-size:.95rem;
+  }
+  #resultMeta b{color:var(--ink);}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+    gap:18px;
+  }
+  .card{
+    background:var(--paper);
+    border:3px solid var(--line);
+    border-radius:16px;
+    padding:16px 16px 14px;
+    box-shadow:4px 4px 0 var(--line);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    animation:pop .25s ease both;
+  }
+  @keyframes pop{
+    from{opacity:0; transform:translateY(6px) scale(.98);}
+    to{opacity:1; transform:translateY(0) scale(1);}
+  }
+  .card .tag-se{
+    position:absolute;
+    top:-12px; left:14px;
+    background:var(--stan-blue);
+    color:#fff;
+    font-family:'Baloo 2';
+    font-weight:800;
+    font-size:.78rem;
+    padding:4px 10px;
+    border-radius:999px;
+    border:2.5px solid var(--line);
+  }
+  .card h3{
+    margin:10px 0 0;
+    font-size:1.18rem;
+    line-height:1.2;
+    color:var(--ink);
+  }
+  .card .desc{
+    font-size:.92rem;
+    line-height:1.45;
+    color:#3a3f47;
+    margin:0;
+    flex:1;
+  }
+  .card .quote{
+    font-weight:700;
+    font-style:italic;
+    font-size:.87rem;
+    color:var(--cartman-red);
+    border-left:3px solid var(--cartman-red);
+    padding-left:8px;
+    margin:2px 0;
+  }
+  .charrow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:4px;
+  }
+  .pill{
+    font-size:.72rem;
+    font-weight:800;
+    padding:3px 9px;
+    border-radius:999px;
+    border:2px solid var(--line);
+    background:var(--snow2);
+  }
+  .pill.p-cartman{background:#f7d9d0;}
+  .pill.p-stan{background:#d9ecf7;}
+  .pill.p-kyle{background:#dcecd3;}
+  .pill.p-kenny{background:#fbe6bd;}
+  .pill.p-other{background:#eee0f5;}
+
+  #empty{
+    text-align:center;
+    padding:50px 20px;
+    display:none;
+  }
+  #empty.show{display:block;}
+  #empty .big{font-size:3rem; margin-bottom:6px;}
+  #empty h3{margin:0 0 6px;}
+  #empty p{color:#5a6270; font-weight:600; max-width:380px; margin:0 auto;}
+
+  footer{
+    text-align:center;
+    padding:20px;
+    font-size:.78rem;
+    color:#6b7280;
+    font-weight:600;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .card{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <span class="badge">GANZ RUHIGE, FRIEDLICHE BERGSTADT</span>
+    <h1>Der South&nbsp;Park<br>Folgen&#8209;Finder</h1>
+    <p class="sub">Alle 338 Folgen &middot; such nach Figuren, Running Gags oder z.&nbsp;B. S8E7 &ndash; wir schlagen dir die passende Folge vor.</p>
+  </div>
+  <div class="mtn">
+    <svg viewBox="0 0 1200 160" preserveAspectRatio="none">
+      <polygon points="0,160 0,90 120,30 230,95 340,15 480,100 600,40 730,110 860,55 1000,120 1120,60 1200,100 1200,160" fill="#fbfdff" stroke="#20242a" stroke-width="4" stroke-linejoin="round"/>
+      <polygon points="120,30 150,55 90,55" fill="#dfeaf3" stroke="#20242a" stroke-width="3" stroke-linejoin="round"/>
+      <polygon points="340,15 372,42 308,42" fill="#dfeaf3" stroke="#20242a" stroke-width="3" stroke-linejoin="round"/>
+      <polygon points="600,40 630,64 570,64" fill="#dfeaf3" stroke="#20242a" stroke-width="3" stroke-linejoin="round"/>
+      <polygon points="860,55 888,77 832,77" fill="#dfeaf3" stroke="#20242a" stroke-width="3" stroke-linejoin="round"/>
+      <polygon points="1120,60 1146,80 1094,80" fill="#dfeaf3" stroke="#20242a" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+  </div>
+</header>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#20242a" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+    <input id="search" type="text" placeholder="z.B. Towlie, Die klauen unsere Jobs, S8E7, ManBearPig..." autocomplete="off">
+    <button id="clearBtn" aria-label="Suche leeren">&times;</button>
+  </div>
+</div>
+
+<div class="chips" id="chips">
+  <button class="chip c1" data-q="Cartman">Cartman</button>
+  <button class="chip c2" data-q="Towlie">Towlie</button>
+  <button class="chip c3" data-q="Die klauen unsere Jobs">Die klauen unsere Jobs</button>
+  <button class="chip c4" data-q="Butters">Butters</button>
+  <button class="chip c1" data-q="Aliens">Aliens</button>
+  <button class="chip c2" data-q="Weihnachten">Weihnachten</button>
+  <button class="chip c3" data-q="Randy">Randy</button>
+  <button class="chip c4" data-q="Mr. Hankey">Mr. Hankey</button>
+  <button class="chip c1" data-q="ManBearPig">ManBearPig</button>
+  <button class="chip c2" data-q="PC Principal">PC Principal</button>
+  <button class="chip c3" data-q="Member Berries">Member Berries</button>
+  <button class="chip c4" data-q="Tegridy Farms">Tegridy Farms</button>
+  <button class="chip c1" data-q="Scott Tenorman">Scott Tenorman</button>
+  <button class="chip c2" data-q="Imaginationland">Imaginationland</button>
+  <button class="chip c3" data-q="Mysterion">Mysterion</button>
+  <button class="chip c4" data-q="Kenny stirbt">Kenny stirbt</button>
+</div>
+
+<main>
+  <div id="resultMeta"></div>
+  <div class="grid" id="grid"></div>
+  <div id="empty">
+    <div class="big">&#127955;</div>
+    <h3>Nix gefunden, dude.</h3>
+    <p>Probier's mit einem Figurennamen, einem Meme oder einem Running Gag &ndash; z.B. "Unterhosen-Gnome" oder "ManBearPig".</p>
+  </div>
+</main>
+
+<footer>Inoffizielles Fan-Projekt &middot; South Park &copy; Comedy Central / Trey Parker &amp; Matt Stone &middot; nur zur Orientierung, keine Streaming-Quelle</footer>
+
+<script>
+const EPISODES = [
+// ---- Staffel 1 (1997-1998) ----
+{s:1,e:1,title:"Cartman Gets an Anal Probe",chars:["Cartman"],tags:["Aliens","Ufo","Analsonde","Pilotfolge","Kuh"],desc:"Die allererste Folge: Cartman wird nachts von Aliens entführt und untersucht, während die Jungs eine tote Kuh entdecken."},
+{s:1,e:2,title:"Volcano",chars:["Stan","Cartman"],tags:["Vulkan","Angeln","Onkel Jimbo"],desc:"Ein Angelausflug mit Onkel Jimbo endet damit, dass der örtliche Vulkan plötzlich auszubrechen droht."},
+{s:1,e:3,title:"Weight Gain 4000",chars:["Cartman","Kathie Lee Gifford"],tags:["Diätpillen","Wettbewerb","Umweltpreis"],desc:"Cartman nimmt fragwürdige Diätpillen, um einen Umweltschutz-Wettbewerb zu gewinnen."},
+{s:1,e:4,title:"Big Gay Al's Big Gay Boat Ride",chars:["Stan","Big Gay Al"],tags:["Big Gay Al","Hund","Coming-out"],desc:"Stan findet heraus, dass sein Hund schwul ist, und trifft dabei den fröhlichen Big Gay Al."},
+{s:1,e:5,title:"An Elephant Makes Love to a Pig",chars:["Kyle","Ike"],tags:["Genexperiment","Geschwister"],desc:"Kyles kleiner Bruder Ike soll ein neues Geschwisterchen bekommen &ndash; per fragwürdigem Genexperiment."},
+{s:1,e:6,title:"Death",chars:["Stan","Terrance and Phillip"],tags:["Oma","Zensur","Sterben"],desc:"Stans Oma wünscht sich sehnlichst zu sterben, während eine landesweite Zensurdebatte um die Kinderserie Terrance and Phillip tobt."},
+{s:1,e:7,title:"Pinkeye",chars:["Kenny","Cartman"],tags:["Halloween","Zombie","Kenny stirbt"],desc:"Kurz vor Halloween stirbt Kenny und kommt kurzerhand als Zombie zurück in die Stadt."},
+{s:1,e:8,title:"Starvin' Marvin",chars:["Cartman"],tags:["Äthiopien","Truthahn","Thanksgiving"],desc:"Cartman verwechselt ein hungerndes Kind aus Äthiopien mit einem Truthahn zu Thanksgiving."},
+{s:1,e:9,title:"Mr. Hankey, the Christmas Poo",chars:["Kyle","Mr. Hankey"],tags:["Weihnachten","Mr Hankey","Klo"],desc:"Kyle behauptet, ein sprechendes Weihnachtshäufchen namens Mr. Hankey zu kennen &ndash; niemand glaubt ihm, bis die Stadt in Weihnachtshysterie verfällt."},
+{s:1,e:10,title:"Damien",chars:["Damien","Jesus","Satan"],tags:["Satan","Boxkampf","Antichrist"],desc:"Der Sohn des Teufels kommt neu an die Schule, während Jesus gegen Satan in den Boxring steigt."},
+{s:1,e:11,title:"Tom's Rhinoplasty",chars:["Stan","Wendy"],tags:["Lehrerin","Eifersucht"],desc:"Eine neue, attraktive Lehrerin sorgt für Eifersucht &ndash; auch bei Wendy gegenüber Stan."},
+{s:1,e:12,title:"Mecha-Streisand",chars:["Barbra Streisand"],tags:["Godzilla","Monster","Parodie"],desc:"Barbra Streisand verwandelt sich in ein riesiges, Godzilla-artiges Monster, das die Stadt bedroht."},
+{s:1,e:13,title:"Cartman's Mom Is a Dirty Slut",chars:["Cartman"],tags:["Vatersuche","Krimi"],desc:"Cartman begibt sich auf die Suche nach seinem leiblichen Vater, verdächtige Männer inklusive."},
+// ---- Staffel 2 (1998-1999) ----
+{s:2,e:1,title:"Terrance and Phillip in Not Without My Anus",chars:["Terrance and Phillip"],tags:["Kanada","Show im Show"],desc:"Eine Folge der Kinderserie Terrance and Phillip, in der die zwei Kanadier eine Rettungsmission bestehen."},
+{s:2,e:2,title:"Cartman's Mom Is Still a Dirty Slut",chars:["Cartman"],tags:["Vatersuche","Krimi"],desc:"Fortsetzung der Vatersuche &ndash; die Auflösung sorgt für einen der bizarrsten Twists der Serie."},
+{s:2,e:3,title:"Ike's Wee Wee",chars:["Kyle","Ike"],tags:["Beschneidung","Missverständnis"],desc:"Ein Missverständnis rund um Ikes bevorstehende Beschneidung sorgt für helle Aufregung."},
+{s:2,e:4,title:"Chickenlover",chars:["Officer Barbrady"],tags:["Officer Barbrady","Lesenlernen"],desc:"Officer Barbrady kann nicht lesen &ndash; und muss es dringend lernen, um einen Hühner-Fetischisten zu überführen."},
+{s:2,e:5,title:"Conjoined Fetus Lady",chars:["Kenny","Cartman"],tags:["Krankenhaus","Krankenschwester"],desc:"Kenny verletzt sich schwer beim Schlittschuhlaufen und trifft im Krankenhaus auf eine ungewöhnliche Krankenschwester."},
+{s:2,e:6,title:"The Mexican Staring Frog of Southern Sri Lanka",chars:["Stan","Kyle"],tags:["Väter","Streich"],desc:"Stan und Kyle wollen ihre Väter mit einer erfundenen Tierlegende hereinlegen."},
+{s:2,e:7,title:"City on the Edge of Forever",chars:["Stan","Cartman"],tags:["Schulbus","Evakuierung"],desc:"Der Schulbus droht von einer Klippe zu stürzen, während die Stadt in Panik evakuiert wird."},
+{s:2,e:8,title:"Summer Sucks",chars:["Stan","Cartman"],tags:["Feuerwerk","Sommerfest"],desc:"Ein Stadtfest mit einer gigantischen, illegalen Feuerwerksrakete sorgt für Chaos im Sommer."},
+{s:2,e:9,title:"Chef's Chocolate Salty Balls",chars:["Chef"],tags:["Chef","Musik","Filmvorbote"],desc:"Chef singt sein berühmtestes Lied &ndash; die Folge diente als Vorbote für den Kinofilm der Serie."},
+{s:2,e:10,title:"Chickenpox",chars:["Cartman","Kyle"],tags:["Windpocken","Mütter"],desc:"Eine Windpocken-Party unter den Müttern sorgt für Streit zwischen Cartman und Kyle."},
+{s:2,e:11,title:"Roger Ebert Should Lay Off the Fatty Foods",chars:["Cartman"],tags:["Filmkritiker","Parodie"],desc:"Eine Filmkritiker-Parodie rund um einen berühmten realen US-Kritiker."},
+{s:2,e:12,title:"Clubhouses",chars:["Stan","Kyle","Cartman"],tags:["Baumhaus","Streit"],desc:"Ein Streit um das schönere Baumhaus eskaliert zwischen den Jungengruppen."},
+{s:2,e:13,title:"Cow Days",chars:["Stan","Randy"],tags:["Jahrmarkt","Kühe"],desc:"Das jährliche Kuhfest der Stadt gerät völlig außer Kontrolle."},
+{s:2,e:14,title:"Chef Aid",chars:["Chef","Randy"],tags:["Plattenfirma","Konzert"],desc:"Chef verklagt eine große Plattenfirma wegen gestohlener Songrechte &ndash; ein Promi-Benefizkonzert soll helfen."},
+{s:2,e:15,title:"Spookyfish",chars:["Cartman"],tags:["Paralleluniversum","Halloween"],desc:"Ein böser Cartman aus einem Paralleluniversum taucht plötzlich in South Park auf."},
+{s:2,e:16,title:"Merry Christmas, Charlie Manson!",chars:["Stan"],tags:["Weihnachten","Gefängnis"],desc:"Ein entlassener Serienmörder verbringt ausgerechnet Weihnachten bei einer Familie in der Stadt."},
+{s:2,e:17,title:"Gnomes",chars:["Tweek"],tags:["Unterhosen-Gnome","Phase 1 2 3","Profit","Wirtschaft"],desc:"Winzige Gnome klauen nachts Unterhosen nach dem Plan Phase 1: klauen, Phase 2: ?, Phase 3: Profit &ndash; eine Wirtschaftssatire in Reinform."},
+{s:2,e:18,title:"Prehistoric Ice Man",chars:["Stan","Randy"],tags:["Eismann","Steinzeit"],desc:"Ein aufgetauter Steinzeitmensch stellt das Weltbild der ganzen Stadt auf den Kopf."},
+// ---- Staffel 3 (1999-2000) ----
+{s:3,e:1,title:"Rainforest Schmainforest",chars:["Cartman","Kyle"],tags:["Regenwald","Chorreise","Umwelt"],desc:"Die Kinder werden auf eine Sing-Reise nach Costa Rica geschickt, um den Regenwald zu retten &ndash; und geraten prompt in echte Dschungelgefahr."},
+{s:3,e:2,title:"Spontaneous Combustion",chars:["Randy","Stan"],tags:["Explosion","Panik"],desc:"Menschen in der Stadt explodieren plötzlich spontan &ndash; Panik macht sich breit."},
+{s:3,e:3,title:"Succubus",chars:["Chef"],tags:["Chef","Dämonin","Liebe"],desc:"Chef verliebt sich Hals über Kopf in eine mysteriöse, dämonische Frau."},
+{s:3,e:4,title:"Jakovasaurs",chars:["Stan","Kyle"],tags:["Dinosaurier","Nervig"],desc:"Eine Familie sprechender, extrem nerviger Dinosaurier taucht in der Stadt auf."},
+{s:3,e:5,title:"Tweek vs. Craig",chars:["Tweek","Craig"],tags:["Schulhofkampf"],desc:"Tweek und Craig werden von Erwachsenen zu einem Schulhofkampf gezwungen, den keiner der beiden eigentlich will."},
+{s:3,e:6,title:"Sexual Harassment Panda",chars:["Cartman"],tags:["Aufklärung","Klagewelle"],desc:"Ein gut gemeintes Aufklärungs-Maskottchen löst eine ganze Klagewelle in der Schule aus."},
+{s:3,e:7,title:"Cat Orgy",chars:["Cartman","Ike"],tags:["Babysitten","Katzen","Shakira"],desc:"Cartman soll auf Ike aufpassen, während im Haus nebenan tatsächlich eine Katzenorgie stattfindet."},
+{s:3,e:8,title:"Two Guys Naked in a Hot Tub",chars:["Randy","Stan"],tags:["Whirlpool","Väter"],desc:"Eine unangenehme Situation in einem Whirlpool zwischen zwei Vätern sorgt für Gerede in der Stadt."},
+{s:3,e:9,title:"Jewbilee",chars:["Kyle","Cartman"],tags:["Jamboree","Religion","Camp"],desc:"Kyle nimmt an einem jüdischen Lager namens Jewbilee teil, während Cartman sich als Jude ausgibt, um mitzukommen."},
+{s:3,e:10,title:"Korn's Groovy Pirate Ghost Mystery",chars:["Stan","Kyle"],tags:["Korn","Geister","Piraten"],desc:"Die Band Korn hilft den Jungs, ein Piratengeister-Mysterium in der Stadt aufzuklären."},
+{s:3,e:11,title:"Chinpokomon",chars:["Cartman","Stan"],tags:["Pokemon","Japan","Spielzeug"],desc:"Ein neues Sammelspiel erobert die Herzen der Kinder &ndash; und entpuppt sich als Teil eines japanischen Propaganda-Plans."},
+{s:3,e:12,title:"Hooked on Monkey Fonics",chars:["Cartman","Kyle"],tags:["Rechtschreibwettbewerb"],desc:"Ein landesweiter Rechtschreibwettbewerb wird für die Kinder zur echten Nervenprobe."},
+{s:3,e:13,title:"Starvin' Marvin in Space",chars:["Cartman"],tags:["Aliens","Äthiopien"],desc:"Marvin aus Äthiopien kehrt zurück, diesmal mit einer Alien-Rettungsmission verwoben."},
+{s:3,e:14,title:"The Red Badge of Gayness",chars:["Cartman","Stan"],tags:["Bürgerkrieg","Reenactment"],desc:"Ein Bürgerkriegs-Reenactment gerät den Vätern der Stadt völlig aus dem Ruder."},
+{s:3,e:15,title:"Mr. Hankey's Christmas Classics",chars:["Mr. Hankey"],tags:["Mr Hankey","Weihnachten","Musical"],desc:"Ein musikalisches Weihnachtsspecial rund um Mr. Hankey und seine Klassiker."},
+{s:3,e:16,title:"Are You There God? It's Me, Jesus",chars:["Wendy"],tags:["Periode","Mädchen"],desc:"Als Wendy ihre erste Periode bekommt, geraten plötzlich alle Mädchen der Stadt gleichzeitig in denselben Zustand."},
+{s:3,e:17,title:"World Wide Recorder Concert",chars:["Stan","Cartman"],tags:["Flötenkonzert","Furz"],desc:"Ein landesweites Flötenkonzert wird von einem mysteriösen, ansteckenden Ton überschattet."},
+// ---- Staffel 4 (2000) ----
+{s:4,e:1,title:"The Tooth Fairy's Tats 2000",chars:["Stan","Cartman"],tags:["Zahnfee","Betrug"],desc:"Die Jungs entdecken, dass es die Zahnfee gar nicht gibt, und starten einen einträglichen Zahn-Betrug."},
+{s:4,e:2,title:"Cartman's Silly Hate Crime 2000",chars:["Cartman"],tags:["Hassverbrechen","Gericht"],desc:"Cartman wird wegen eines Hassverbrechens vor Gericht gestellt &ndash; mit überraschenden Folgen."},
+{s:4,e:3,title:"Timmy 2000",chars:["Timmy"],tags:["Timmy","Rockstar","Ritalin"],desc:"Timmy wird zum ungewollten Rockstar, während eine Ritalin-Debatte die Stadt spaltet."},
+{s:4,e:4,title:"Quintuplets 2000",chars:["Cartman"],tags:["Fünflinge","Kanada"],desc:"Kanadische Fünflinge besuchen die Stadt und sorgen für jede Menge Aufsehen."},
+{s:4,e:5,title:"Cartman Joins NAMBLA",chars:["Cartman"],tags:["Verein","Missverständnis"],desc:"Auf der Suche nach Gleichgesinnten gerät Cartman versehentlich an einen sehr fragwürdigen Verein."},
+{s:4,e:6,title:"Cherokee Hair Tampons",chars:["Kyle","Ike"],tags:["Wunderheilung","Diabetes"],desc:"Kyles Mutter setzt bei Ikes Gesundheit auf zweifelhafte alternative Wunderheilmethoden."},
+{s:4,e:7,title:"Chef Goes Nanners",chars:["Chef","Stadtrat"],tags:["Stadtflagge","Rassismus-Debatte"],desc:"Ein Streit um die alte Stadtflagge entfacht eine hitzige Debatte im Stadtrat."},
+{s:4,e:8,title:"Something You Can Do with Your Finger",chars:["Stan","Cartman"],tags:["Boyband","Musik"],desc:"Die Jungs gründen eine Boyband, um Mädchen zu beeindrucken &ndash; eine Parodie auf die Boyband-Welle um die Jahrtausendwende."},
+{s:4,e:9,title:"Do the Handicapped Go to Hell?",chars:["Timmy","Cartman"],tags:["Himmel","Behinderung"],desc:"Eine Predigt über den Himmel wirft für Timmy eine beunruhigende Frage auf."},
+{s:4,e:10,title:"Probably",chars:["Cartman","Timmy"],tags:["Himmel","Hölle"],desc:"Fortsetzung der Himmel-und-Hölle-Debatte, diesmal mit Cartman mittendrin."},
+{s:4,e:11,title:"Fourth Grade",chars:["Stan","Kyle","Cartman"],tags:["Neue Klasse","Ms Choksondik"],desc:"Der Start in die vierte Klasse bringt eine neue, eigenwillige Lehrerin mit sich."},
+{s:4,e:12,title:"Trapper Keeper",chars:["Cartman","Kenny"],tags:["Schulranzen","Wahl"],desc:"Cartmans neuer Trapper-Keeper-Ordner entwickelt künstliche Intelligenz und wird zur Bedrohung, während die Kinder einen Klassensprecher wählen."},
+{s:4,e:13,title:"Helen Keller! The Musical",chars:["Schulklasse"],tags:["Schulmusical","Wettbewerb"],desc:"Ein Schulmusical-Wettbewerb sorgt für ungeahnte Dramen hinter den Kulissen."},
+{s:4,e:14,title:"Pip",chars:["Pip"],tags:["Great Expectations","Parodie"],desc:"Eine der wenigen Folgen ganz ohne die vier Hauptjungs: eine Dickens-Parodie rund um den britischen Mitschüler Pip."},
+{s:4,e:15,title:"Fat Camp",chars:["Cartman"],tags:["Abnehmcamp"],desc:"Cartman wird in ein Abnehm-Camp geschickt &ndash; mit vorhersehbar chaotischem Ergebnis."},
+{s:4,e:16,title:"The Wacky Molestation Adventure",chars:["Stan","Kyle","Cartman"],tags:["Eltern","Übernahme"],desc:"Als Eltern zu Unrecht verdächtigt werden, übernehmen die Kinder kurzerhand die Kontrolle über die Stadt."},
+{s:4,e:17,title:"A Very Crappy Christmas",chars:["Stan","Kyle","Cartman","Kenny"],tags:["Weihnachten","Film"],desc:"Da die Stadt ihre Weihnachtsstimmung verloren hat, drehen die Jungs kurzerhand einen eigenen Weihnachtsfilm."},
+// ---- Staffel 5 (2001) ----
+{s:5,e:1,title:"It Hits the Fan",chars:["Randy","Chef"],tags:["Zensur","Zähler"],desc:"Ein bestimmtes Schimpfwort fällt in dieser Folge 162 Mal &ndash; live mitgezählt per Bildschirmzähler."},
+{s:5,e:2,title:"Cripple Fight",chars:["Jimmy","Timmy","Big Gay Al"],tags:["Pfadfinder","Streit"],desc:"Jimmy und Timmy geraten aneinander, während ein Pfadfinderverband über Big Gay Al streitet."},
+{s:5,e:3,title:"Super Best Friends",chars:["Cartman","David Blaine"],tags:["Religionsstifter","Zauberer"],desc:"Ein Team aus Religionsstiftern tritt als Superheldengruppe gegen einen manipulativen Zauberer an."},
+{s:5,e:4,title:"Scott Tenorman Must Die",chars:["Cartman","Scott Tenorman"],tags:["Rache","Chili","Radiohead"],desc:"Ein älterer Junge legt sich mit Cartman an &ndash; und Cartman plant die wohl bösartigste, minutiös vorbereitete Rache der Serie."},
+{s:5,e:5,title:"Terrance and Phillip: Behind the Blow",chars:["Terrance and Phillip"],tags:["Doku-Parodie"],desc:"Eine Doku-Parodie über das berühmte kanadische Comedy-Duo Terrance und Phillip."},
+{s:5,e:6,title:"Cartmanland",chars:["Cartman"],tags:["Erbschaft","Freizeitpark"],desc:"Cartman erbt eine große Summe Geld und kauft sich kurzerhand einen ganzen Freizeitpark."},
+{s:5,e:7,title:"Proper Condom Use",chars:["Stan","Kyle"],tags:["Sexualkunde"],desc:"Ein Sexualkundeunterricht für Grundschüler sorgt für allerlei Verwirrung."},
+{s:5,e:8,title:"Towelie",chars:["Towlie","Cartman","Stan"],tags:["Towlie","Handtuch","Kiffen","Videospielkonsole"],desc:"Die Jungs geraten wegen ihrer gestohlenen Spielekonsole zwischen die Fronten von Aliens und Söldnern &ndash; mittendrin: das ständig bekiffte, sprechende Handtuch Towlie."},
+{s:5,e:9,title:"Osama bin Laden Has Farty Pants",chars:["Stan","Cartman"],tags:["Afghanistan","Reise"],desc:"Die Jungs reisen nach Afghanistan, um dort für Aufklärung unter den Kindern zu sorgen."},
+{s:5,e:10,title:"How to Eat with Your Butt",chars:["Cartman","Ms. Cartman-Doppelgänger"],tags:["Verwechslung"],desc:"Eine bizarre Verwechslung sorgt für ausuferndes Chaos in der ganzen Stadt."},
+{s:5,e:11,title:"The Entity",chars:["Cartman","Kyle"],tags:["Transportmittel","Umwelt"],desc:"Cartmans neues Transportmittel sorgt für hitzige Umweltdiskussionen in der Stadt."},
+{s:5,e:12,title:"Here Comes the Neighborhood",chars:["Token","Stadtbewohner"],tags:["Reichtum","Klassendenken"],desc:"Plötzlicher Reichtum spaltet die Bewohner South Parks in Arm und Reich."},
+{s:5,e:13,title:"Kenny Dies",chars:["Kenny","Cartman"],tags:["Krankheit","Stammzellen"],desc:"Kenny wird schwer krank, was in der Stadt eine ernste Debatte über Stammzellenforschung auslöst."},
+{s:5,e:14,title:"Butters' Very Own Episode",chars:["Butters"],tags:["Butters","Familie","Origin"],desc:"Eine der wenigen Folgen ganz ohne die vier Hauptjungs: Butters' Eltern drehen wegen eines Missverständnisses völlig durch."},
+// ---- Staffel 6 (2002) ----
+{s:6,e:1,title:"Jared Has Aides",chars:["Cartman"],tags:["Werbefigur","Missverständnis"],desc:"Ein Missverständnis rund um eine bekannte Werbefigur sorgt für Panik in der Stadt."},
+{s:6,e:2,title:"Asspen",chars:["Stan","Cartman"],tags:["Skiausflug","Werbung"],desc:"Ein Skiausflug wird zur Parodie auf übertriebenes Werbe-Product-Placement."},
+{s:6,e:3,title:"Freak Strike",chars:["Cartman"],tags:["Promi-Show"],desc:"Eine kuriose Promi-Boxshow bringt allerlei schräge Figuren nach South Park."},
+{s:6,e:4,title:"Fun with Veal",chars:["Cartman","Kyle"],tags:["Kalb","Tierschutz"],desc:"Cartman kauft sich ein Kalb, was eine Tierschutzdebatte in der Stadt entfacht."},
+{s:6,e:5,title:"The New Terrance and Phillip Movie Trailer",chars:["Terrance and Phillip"],tags:["Filmstart","Streit"],desc:"Ein verschobener Filmstart der geliebten Terrance-and-Phillip-Reihe bringt die Jungs auf die Palme."},
+{s:6,e:6,title:"Professor Chaos",chars:["Butters"],tags:["Professor Chaos","Superschurke"],desc:"Butters erfindet sein Superschurken-Alter-Ego Professor Chaos, nachdem er von Stan und Kyle verstoßen wird."},
+{s:6,e:7,title:"Simpsons Already Did It",chars:["Butters"],tags:["Butters","Professor Chaos","Die Simpsons"],desc:"Butters verwandelt sich in seine Superschurken-Identität Professor Chaos &ndash; nur um festzustellen, dass jede seiner Ideen schon von den Simpsons benutzt wurde."},
+{s:6,e:8,title:"Red Hot Catholic Love",chars:["Randy","Priester"],tags:["Kirche","Skandal"],desc:"Ein Missbrauchsskandal in der katholischen Kirche wird auf South-Park-Art aufs Korn genommen."},
+{s:6,e:9,title:"Free Hat",chars:["Stan","Kyle"],tags:["Filmklassiker","Nachbearbeitung"],desc:"Fans wollen die nachträglich veränderten Spezialeffekte eines alten Kultfilms rückgängig machen."},
+{s:6,e:10,title:"Bebe's Boobs Destroy Society",chars:["Cartman","Bebe"],tags:["Bebe","Entwicklung"],desc:"Bebes körperliche Entwicklung lenkt die Jungs vom Unterricht ab und sorgt für Diskussionen."},
+{s:6,e:11,title:"Child Abduction Is Not Funny",chars:["Eltern"],tags:["Entführungsangst","Hysterie"],desc:"Übertriebene Elternhysterie rund um angebliche Kindesentführungen erfasst die ganze Stadt."},
+{s:6,e:12,title:"A Ladder to Heaven",chars:["Kenny","Cartman"],tags:["Trauer","Himmel"],desc:"Nach dem Tod eines Freundes bauen die Jungs buchstäblich eine Leiter in den Himmel."},
+{s:6,e:13,title:"The Return of the Fellowship of the Ring to the Two Towers",chars:["Cartman","Butters"],tags:["Herr der Ringe","Parodie","DVD"],desc:"Die Jungs sollen eine DVD durch den Schnee bringen &ndash; eine liebevolle Herr-der-Ringe-Parodie mit waschechten Filmzitaten."},
+{s:6,e:14,title:"The Death Camp of Tolerance",chars:["Mr. Garrison"],tags:["Toleranz","Diskriminierung"],desc:"Mr. Garrison will sich absichtlich wegen Diskriminierung feuern lassen &ndash; mit unerwarteten Konsequenzen."},
+{s:6,e:15,title:"The Biggest Douche in the Universe",chars:["Cartman"],tags:["Seelentausch","Medium"],desc:"Cartmans Seele landet im Körper eines bekannten TV-Mediums &ndash; mit skurrilen Folgen."},
+{s:6,e:16,title:"My Future Self 'n' Me",chars:["Stan"],tags:["Anti-Drogen-Kampagne"],desc:"Eine fragwürdige Anti-Drogen-Kampagne mit Schauspielern soll Stan von schlechten Entscheidungen abhalten."},
+{s:6,e:17,title:"Red Sleigh Down",chars:["Weihnachtsmann","Jesus"],tags:["Weihnachtsmann","Kriegsgebiet"],desc:"Eine gewagte Rettungsmission für den Weihnachtsmann führt mitten in ein Kriegsgebiet."},
+// ---- Staffel 7 (2003) ----
+{s:7,e:1,title:"Cancelled",chars:["Kenny","Cartman"],tags:["Aliens","Reality-TV","Kenny"],desc:"Kenny findet heraus, dass die ganze Erde nur eine Reality-Show für Aliens ist &ndash; Serienstart mit einem riesigen Twist."},
+{s:7,e:2,title:"Krazy Kripples",chars:["Jimmy","Timmy"],tags:["Selbsthilfegruppe"],desc:"Jimmy und Timmy gründen eine Selbsthilfegruppe für Menschen mit Behinderung, die schnell aus dem Ruder läuft."},
+{s:7,e:3,title:"Toilet Paper",chars:["Stan","Kyle","Cartman","Kenny"],tags:["Streich","Polizei"],desc:"Ein harmloser Klopapier-Streich bringt die Jungs plötzlich ins Visier der örtlichen Polizei."},
+{s:7,e:4,title:"I'm a Little Bit Country",chars:["Cartman","Stan"],tags:["Gedenktag","Krieg"],desc:"Ein Streit um einen schulischen Gedenktag entfacht eine hitzige Debatte über einen aktuellen Krieg."},
+{s:7,e:5,title:"Fat Butt and Pancake Head",chars:["Cartman"],tags:["Handpuppe"],desc:"Cartman bekommt eine Handpuppe, die bald ein Eigenleben zu entwickeln scheint."},
+{s:7,e:6,title:"Lil' Crime Stoppers",chars:["Stan","Cartman"],tags:["Detektive"],desc:"Die Jungs spielen Hobby-Detektive und geraten dabei tiefer in echte Polizeiarbeit, als ihnen lieb ist."},
+{s:7,e:7,title:"Red Man's Greed",chars:["Stadtbewohner"],tags:["Casino","Indianer"],desc:"Ein geplantes Casino auf indianischem Land bedroht die Zukunft der ganzen Stadt South Park."},
+{s:7,e:8,title:"South Park Is Gay",chars:["Stan","Randy"],tags:["Metrosexualität","Trend"],desc:"Ein neuer Modetrend rund um Metrosexualität erobert plötzlich die ganze Stadt."},
+{s:7,e:9,title:"Christian Rock Hard",chars:["Cartman"],tags:["Christliche Musik","Band"],desc:"Cartman gründet eine zynisch berechnende christliche Rockband, um schnelles Geld zu machen."},
+{s:7,e:10,title:"Grey Dawn",chars:["Stan","Randy"],tags:["Senioren","Straßenverkehr"],desc:"Ältere Autofahrer sorgen im Straßenverkehr der Stadt für gefährliches Chaos."},
+{s:7,e:11,title:"Casa Bonita",chars:["Cartman","Kyle","Butters"],tags:["Casa Bonita","Restaurant","Fake-Entführung"],desc:"Cartman will unbedingt zur Geburtstagsfeier im Fantasie-Restaurant Casa Bonita und schreckt dafür vor nichts zurück."},
+{s:7,e:12,title:"All About Mormons",chars:["Gary","Stan"],tags:["Mormonen","Religion"],desc:"Eine neue mormonische Familie zieht zu und erzählt den Jungs die Ursprungsgeschichte ihres Glaubens."},
+{s:7,e:13,title:"Butt Out",chars:["Stan","Kyle"],tags:["Raucherlobby","Manipulation"],desc:"Ein Anti-Raucher-Aktivist versucht, die Jungs für seine eigene Agenda zu manipulieren."},
+{s:7,e:14,title:"Raisins",chars:["Stan","Wendy"],tags:["Liebeskummer","Restaurant"],desc:"Nach dem Liebeskummer mit Wendy landet Stan im Hooters-artigen Restaurant Raisins."},
+{s:7,e:15,title:"It's Christmas in Canada",chars:["Ike","Kyle"],tags:["Weihnachten","Kanada"],desc:"Ikes leibliche Eltern aus Kanada wollen ihn zu Weihnachten zurückholen."},
+// ---- Staffel 8 (2004) ----
+{s:8,e:1,title:"Good Times with Weapons",chars:["Stan","Cartman","Kyle","Kenny"],tags:["Ninjas","Anime","Waffen"],desc:"Die Jungs kaufen echte Ninja-Waffen auf einem Jahrmarkt und stellen sich die folgenden Ereignisse als Anime vor."},
+{s:8,e:2,title:"Up the Down Steroid",chars:["Jimmy","Cartman"],tags:["Special Olympics","Doping"],desc:"Jimmy nimmt an den Special Olympics teil, während Cartman eine Behinderung vortäuscht, um mitzumachen."},
+{s:8,e:3,title:"The Passion of the Jew",chars:["Cartman","Kyle"],tags:["Kino","Mel Gibson"],desc:"Nach einem Kinobesuch hetzt ein zelotischer Cartman gegen Kyle &ndash; eine Filmparodie mit religiösem Zündstoff."},
+{s:8,e:4,title:"You Got F'd in the A",chars:["Stan","Randy"],tags:["Tanzwettbewerb"],desc:"Ein Tanzwettbewerb zwischen den Jungs und einer Konkurrenzgruppe eskaliert zur ernsten Angelegenheit."},
+{s:8,e:5,title:"Awesom-O",chars:["Cartman","Butters"],tags:["Roboter","Videoband"],desc:"Cartman verkleidet sich als Roboter namens Awesom-O, um an ein peinliches Videoband von Butters zu kommen."},
+{s:8,e:6,title:"The Jeffersons",chars:["Blanket"],tags:["Prominente Familie"],desc:"Eine exzentrische, berühmte Familie mit einem Kind namens Blanket zieht in die Nachbarschaft."},
+{s:8,e:7,title:"Goobacks",chars:["Cartman","Stan"],tags:["Die klauen unsere Jobs","Zeitreise","Einwanderung","Zukunft"],desc:"Menschen aus einer verarmten Zukunft reisen durch ein Zeitportal und nehmen den Bewohnern von South Park die Jobs weg &ndash; Ursprung des berühmten Rufs 'Die klauen unsere Jobs!'"},
+{s:8,e:8,title:"Douche and Turd",chars:["Stan","Schulmaskottchen"],tags:["Maskottchen-Wahl","Politik"],desc:"Die Wahl eines neuen Schulmaskottchens wird zur bissigen Satire auf das politische Zweiparteiensystem."},
+{s:8,e:9,title:"Something Wall-Mart This Way Comes",chars:["Randy","Stan"],tags:["Wall-Mart","Konsumkritik","Kleinstadt"],desc:"Ein riesiger Wall-Mart-Markt zieht in die Stadt und saugt South Park regelrecht in seinen Konsumsog."},
+{s:8,e:10,title:"Pre-School",chars:["Cartman","Trent Boyett"],tags:["Alter Feind"],desc:"Ein alter Feind aus dem Kindergarten kehrt zurück, um sich an Cartman zu rächen."},
+{s:8,e:11,title:"Quest for Ratings",chars:["Stan","Cartman"],tags:["Schulnachrichten","Wettbewerb"],desc:"Die Jungs drehen eine eigene Nachrichtensendung für die Schule und liefern sich einen Quoten-Wettkampf."},
+{s:8,e:12,title:"Stupid Spoiled Whore Video Playset",chars:["Paris Hilton","Cartman"],tags:["Promi-Spielzeug","Konsum"],desc:"Ein Spielzeug nach dem Vorbild einer verwöhnten Society-Prinzessin wird zum ungesunden Verkaufsschlager."},
+{s:8,e:13,title:"Cartman's Incredible Gift",chars:["Cartman","Kenny"],tags:["Psychic","Koma","Krimi"],desc:"Nach einem Sturz vom Dach glaubt Cartman, hellseherische Kräfte zu haben, und wird tatsächlich zur Ermittlung eines Serienmörders hinzugezogen."},
+{s:8,e:14,title:"Woodland Critter Christmas",chars:["Stan"],tags:["Weihnachten","Waldtiere","Satan","Dunkel"],desc:"Stan hilft niedlichen Waldtierchen bei der Vorbereitung auf eine Weihnachtsgeburt &ndash; die düsterste Wendung der ganzen Serie."},
+// ---- Staffel 9 (2005) ----
+{s:9,e:1,title:"Mr. Garrison's Fancy New Vagina",chars:["Mr. Garrison"],tags:["Geschlechtsangleichung"],desc:"Mr. Garrison lässt sich geschlechtsangleichend operieren und sorgt damit für viel Gesprächsstoff."},
+{s:9,e:2,title:"Die Hippie, Die",chars:["Stan","Randy"],tags:["Hippie-Festival"],desc:"Ein riesiges Hippie-Festival bedroht die Ruhe und den Wohlstand der ganzen Stadt."},
+{s:9,e:3,title:"Wing",chars:["Randy"],tags:["Football","Sportfilm-Parodie"],desc:"Eine Sportfilm-Parodie rund um einen jungen Footballspieler namens Wing."},
+{s:9,e:4,title:"Best Friends Forever",chars:["Kenny"],tags:["Wachkoma","Videospiel-Turnier"],desc:"Kenny liegt im Wachkoma, während im Himmel ein Engel-Videospiel-Turnier über sein Schicksal entscheidet."},
+{s:9,e:5,title:"The Losing Edge",chars:["Stan","Cartman"],tags:["Baseball"],desc:"Die Jungs wollen unbedingt aus ihrer verhassten Baseball-Liga fliegen &ndash; indem sie absichtlich verlieren."},
+{s:9,e:6,title:"The Death of Eric Cartman",chars:["Cartman"],tags:["Ignoriert","Geist"],desc:"Als plötzlich alle ihn ignorieren, ist Cartman überzeugt, tatsächlich gestorben und zum Geist geworden zu sein."},
+{s:9,e:7,title:"Erection Day",chars:["Jimmy"],tags:["Peinlich","Wahl"],desc:"Jimmy hat ständig unpassende Erektionen, gerade als eine wichtige Schulwahl ansteht."},
+{s:9,e:8,title:"Two Days Before the Day After Tomorrow",chars:["Stan","Cartman"],tags:["Katastrophenfilm","Biber"],desc:"Eine Katastrophenfilm-Parodie, bei der ein beschädigter Staudamm die ganze Stadt zu überfluten droht."},
+{s:9,e:9,title:"Marjorine",chars:["Butters"],tags:["Vorgetäuschter Tod","Verkleidung"],desc:"Butters täuscht seinen eigenen Tod vor und verkleidet sich als Mädchen namens Marjorine."},
+{s:9,e:10,title:"Follow That Egg!",chars:["Stan","Kyle"],tags:["Schulprojekt","Ehe-Debatte"],desc:"Ein Schulprojekt rund ums Eierausbrüten läuft parallel zu einer hitzigen Ehe-Debatte in der Stadt."},
+{s:9,e:11,title:"Ginger Kids",chars:["Cartman","Kyle"],tags:["Rothaarige","Ginger","Vorurteile"],desc:"Cartman hält einen Schulvortrag über angebliche 'Gingervitis' &ndash; bis er selbst über Nacht rothaarig und sommersprossig wird."},
+{s:9,e:12,title:"Trapped in the Closet",chars:["Stan","Tom Cruise"],tags:["Scientology","Tom Cruise","Religion"],desc:"Stan wird in der Scientology-Kirche als Wiedergeburt eines Gründervaters gefeiert, während ein berühmter Schauspieler sich in einem Schrank einschließt."},
+{s:9,e:13,title:"Free Willzyx",chars:["Kyle","Cartman"],tags:["Wal","Zoo","Tierrettung"],desc:"Kyle will unbedingt einen gefangenen Wal-Hybrid namens Willzyx befreien &ndash; eine Parodie auf Tierrettungsfilme."},
+{s:9,e:14,title:"Bloody Mary",chars:["Randy"],tags:["Papst","Wunder"],desc:"Eine angeblich blutende Marienstatue sorgt für einen Papstbesuch und viele Debatten in der Stadt."},
+// ---- Staffel 10 (2006) ----
+{s:10,e:1,title:"The Return of Chef",chars:["Chef"],tags:["Rückkehr","Verändert"],desc:"Chef kehrt nach längerer Abwesenheit merkwürdig verändert in die Stadt zurück."},
+{s:10,e:2,title:"Smug Alert!",chars:["Kyle","Gerald"],tags:["Hybridauto","Selbstgefälligkeit"],desc:"Kyles Vater kauft sich ein Hybridauto &ndash; eine bedrohliche Wolke aus Selbstgefälligkeit zieht über das Land."},
+{s:10,e:3,title:"Cartoon Wars Part I",chars:["Cartman","Kyle"],tags:["Family Guy","Mohammed","Zensur"],desc:"South Park nimmt Family Guy aufs Korn, während eine geplante Mohammed-Darstellung im Fernsehen für landesweite Aufregung sorgt."},
+{s:10,e:4,title:"Cartoon Wars Part II",chars:["Cartman","Kyle"],tags:["Family Guy","Mohammed","Zensur"],desc:"Fortsetzung des Zensurstreits, der in einer denkwürdigen Mohammed-Enthüllung gipfelt."},
+{s:10,e:5,title:"A Million Little Fibers",chars:["Towlie"],tags:["Towlie","Buchskandal"],desc:"Eine der wenigen Folgen ohne die vier Hauptjungs: Towlie steht im Zentrum einer Parodie auf einen echten Buchskandal."},
+{s:10,e:6,title:"ManBearPig",chars:["Al Gore"],tags:["ManBearPig","Al Gore","Klimawandel","Monster"],desc:"Al Gore warnt die Stadt vor dem Monster ManBearPig, halb Mann, halb Bär, halb Schwein &ndash; niemand nimmt ihn ernst."},
+{s:10,e:7,title:"Tsst",chars:["Cartman","Liane"],tags:["Erziehung","Hundetrainer"],desc:"Cartmans Mutter holt sich professionelle Hilfe von einem Hunde-Erzieher, um ihren Sohn in den Griff zu bekommen."},
+{s:10,e:8,title:"Make Love, Not Warcraft",chars:["Stan","Cartman","Kyle","Kenny"],tags:["World of Warcraft","Videospiele","Gamer"],desc:"Die Jungs versinken im Online-Rollenspiel World of Warcraft, um einen übermächtigen Griefer zu stoppen."},
+{s:10,e:9,title:"Mystery of the Urinal Deuce",chars:["Cartman","Kyle"],tags:["Verschwörungstheorie"],desc:"Eine Parodie auf populäre Verschwörungstheorien, ausgelöst durch ein mysteriöses Ereignis auf der Schultoilette."},
+{s:10,e:10,title:"Miss Teacher Bangs a Boy",chars:["Schule"],tags:["Lehrerin-Skandal","Medien"],desc:"Eine Affäre zwischen Lehrerin und Schüler wird von den Medien zum reißerischen Zirkus aufgeblasen."},
+{s:10,e:11,title:"Hell on Earth 2006",chars:["Satan"],tags:["Halloween-Party"],desc:"Satans aufwendig geplante Halloween-Party gerät völlig außer Kontrolle."},
+{s:10,e:12,title:"Go God Go",chars:["Cartman","Richard Dawkins"],tags:["Richard Dawkins","Evolution","Atheismus"],desc:"Cartman friert sich ein, um bloß nicht auf die Veröffentlichung einer neuen Spielkonsole warten zu müssen."},
+{s:10,e:13,title:"Go God Go XII",chars:["Cartman"],tags:["Zukunft","Atheismus","Krieg"],desc:"Fortsetzung: Eine Zukunftsvision zeigt eine rein atheistische Welt im erbitterten Krieg."},
+{s:10,e:14,title:"Stanley's Cup",chars:["Stan"],tags:["Eishockey","Training"],desc:"Stan übernimmt widerwillig das Training einer Kinder-Eishockeymannschaft."},
+// ---- Staffel 11 (2007) ----
+{s:11,e:1,title:"With Apologies to Jesse Jackson",chars:["Randy"],tags:["Randy","Rassismus","Entschuldigung"],desc:"Randy sagt live im Fernsehen versehentlich ein rassistisches Schimpfwort und muss sich fortan öffentlich dafür rechtfertigen."},
+{s:11,e:2,title:"Cartman Sucks",chars:["Butters","Cartman"],tags:["Konversionscamp","Erpressung"],desc:"Butters wird in ein zweifelhaftes Camp geschickt, während Cartman ihn mit einem peinlichen Foto erpresst."},
+{s:11,e:3,title:"Lice Capades",chars:["Schule"],tags:["Läuse","Epidemie"],desc:"Eine Läuse-Epidemie an der Schule sorgt für Panik unter Eltern und Kindern."},
+{s:11,e:4,title:"The Snuke",chars:["Cartman","Hillary Clinton"],tags:["Terror-Parodie","Hillary Clinton"],desc:"Eine Terror-Thriller-Parodie rund um eine bekannte Politikerin auf Wahlkampftour."},
+{s:11,e:5,title:"Fantastic Easter Special",chars:["Cartman"],tags:["Osterhase","Verschwörung"],desc:"Eine Verschwörung rund um den Osterhasen wird als Da-Vinci-Code-artiges Rätsel aufgezogen."},
+{s:11,e:6,title:"D-Yikes!",chars:["Mrs. Garrison"],tags:["Coming-out"],desc:"Mrs. Garrison entdeckt eine neue Seite ihres Lebens und stürzt sich kopfüber hinein."},
+{s:11,e:7,title:"Night of the Living Homeless",chars:["Stan","Randy"],tags:["Obdachlose","Zombies","Stadt"],desc:"Als immer mehr Obdachlose nach South Park kommen, gerät die Stadt in eine regelrechte Zombie-Apokalypse-Hysterie."},
+{s:11,e:8,title:"Le Petit Tourette",chars:["Cartman"],tags:["Tourette","Vortäuschen"],desc:"Cartman täuscht das Tourette-Syndrom vor, um ungestraft Schimpfwörter benutzen zu können."},
+{s:11,e:9,title:"More Crap",chars:["Randy"],tags:["Weltrekord","Kothaufen"],desc:"Randy will unbedingt einen Weltrekord für den größten menschlichen Kothaufen aufstellen."},
+{s:11,e:10,title:"Imaginationland Episode I",chars:["Stan","Kyle","Cartman"],tags:["Fantasiewelt","Terroristen"],desc:"Terroristen greifen die Imaginationland genannte Welt aller Fantasiefiguren an."},
+{s:11,e:11,title:"Imaginationland Episode II",chars:["Stan","Kyle"],tags:["Fantasiewelt","Krieg"],desc:"Fortsetzung: Ein Krieg zwischen guten und bösen Fantasiewesen bricht in Imaginationland aus."},
+{s:11,e:12,title:"Imaginationland Episode III",chars:["Kyle","Cartman"],tags:["Fantasiewelt","Finale"],desc:"Der Abschluss der Imaginationland-Trilogie sorgt für eine der bekanntesten Wetten der Serie."},
+{s:11,e:13,title:"Guitar Queer-O",chars:["Stan","Kyle"],tags:["Videospiel-Sucht","Gitarre"],desc:"Ein Gitarren-Videospiel entzweit Stan und Kyle, als einer von beiden zu ehrgeizig wird."},
+{s:11,e:14,title:"The List",chars:["Wendy","Bebe"],tags:["Rangliste","Mädchen"],desc:"Die Mädchen der Klasse erstellen heimlich eine Rangliste der attraktivsten Jungs &ndash; mit Folgen für alle."},
+// ---- Staffel 12 (2008) ----
+{s:12,e:1,title:"Tonsil Trouble",chars:["Cartman","Kyle"],tags:["HIV","Krankenhaus","Mandeln"],desc:"Bei einer Mandel-OP wird versehentlich HIV-infiziertes Blut vertauscht &ndash; Cartman und Kyle geraten in eine ernste Verwicklung."},
+{s:12,e:2,title:"Britney's New Look",chars:["Britney Spears-Parodie"],tags:["Medienrummel","Promi"],desc:"Eine Parodie auf den gnadenlosen Medienrummel um eine bekannte Popsängerin."},
+{s:12,e:3,title:"Major Boobage",chars:["Stan","Kenny"],tags:["Droge","Katzen","Heavy Metal"],desc:"Eine neue Droge sorgt bei Jugendlichen für skurrile, im Heavy-Metal-Stil animierte Katzen-Halluzinationen."},
+{s:12,e:4,title:"Canada on Strike",chars:["Terrance and Phillip"],tags:["Streik","Kanada"],desc:"Ganz Kanada streikt kollektiv dafür, im Internet endlich lustiger zu wirken."},
+{s:12,e:5,title:"Eek, a Penis!",chars:["Mr. Garrison"],tags:["Sexualkunde","Mr Garrison"],desc:"Mr. Garrison übernimmt widerwillig den Sexualkundeunterricht mit chaotischem Ergebnis."},
+{s:12,e:6,title:"Over Logging",chars:["Randy","Stan"],tags:["Internetausfall","Kalifornien"],desc:"Als das Internet plötzlich ausfällt, flieht die Familie Marsh panisch nach Kalifornien."},
+{s:12,e:7,title:"Super Fun Time",chars:["Stan","Cartman"],tags:["Klassenausflug","Geiselnahme"],desc:"Ein Klassenausflug in ein historisches Pionierdorf endet unerwartet in einer Geiselnahme."},
+{s:12,e:8,title:"The China Probrem",chars:["Cartman","Butters"],tags:["China","Indiana Jones"],desc:"Enttäuscht von einem neuen Blockbuster, entwickelt Cartman eine absurde Angst vor China."},
+{s:12,e:9,title:"Breast Cancer Show Ever",chars:["Cartman","Bebe"],tags:["Prügelei","Bebe","Brustkrebs-Monat"],desc:"Nachdem Cartman Bebe wegen ihrer Entwicklung ärgert, fordert sie ihn zu einem legendären Faustkampf auf dem Schulhof heraus."},
+{s:12,e:10,title:"Pandemic",chars:["Stan","Cartman"],tags:["Meerschweinchen","Katastrophe"],desc:"Riesige, außer Kontrolle geratene Meerschweinchen bedrohen die ganze Stadt South Park."},
+{s:12,e:11,title:"Pandemic 2: The Startling",chars:["Stan","Cartman"],tags:["Meerschweinchen","Eskalation"],desc:"Die Meerschweinchen-Invasion eskaliert in dieser actiongeladenen Fortsetzung weiter."},
+{s:12,e:12,title:"About Last Night...",chars:["Cartman","Obama-Parodie"],tags:["Wahlnacht","Politik"],desc:"Eine Wahlnacht-Parodie rund um einen historischen US-Präsidentschaftssieg."},
+{s:12,e:13,title:"Elementary School Musical",chars:["Stan","Cartman"],tags:["High School Musical","Parodie"],desc:"Eine Musical-Filmreihe erobert die Grundschule und spaltet die Klasse in zwei Lager."},
+{s:12,e:14,title:"The Ungroundable",chars:["Stan","Cartman"],tags:["Vampire","Trend"],desc:"Ein neuer Vampir-Trend unter den Schülern sorgt für ungewöhnliche Konflikte mit den Eltern."},
+// ---- Staffel 13 (2009) ----
+{s:13,e:1,title:"The Ring",chars:["Jonas Brothers-Parodie"],tags:["Jonas Brothers","Purity Ring","Disney"],desc:"Die Mädchen der Stadt sind besessen von einer bekannten Boygroup &ndash; eine Satire über Promi-Marketing und Keuschheitsringe."},
+{s:13,e:2,title:"The Coon",chars:["Cartman"],tags:["Superheld","The Coon","Mysterion"],desc:"Cartman erfindet sein Superhelden-Alter-Ego The Coon und muss sich plötzlich echten Konkurrenten wie Mysterion stellen."},
+{s:13,e:3,title:"Margaritaville",chars:["Randy","Stan"],tags:["Wirtschaftskrise","Geldgott"],desc:"Eine Finanzkrise wird in der Stadt als Zorn eines allmächtigen 'Geldgottes' interpretiert."},
+{s:13,e:4,title:"Eat, Pray, Queef",chars:["Stan","Randy"],tags:["Selbstfindung","Reise-Parodie"],desc:"Eine Parodie auf Selbstfindungs-Reisebestseller, die die Stadt gehörig auf den Kopf stellt."},
+{s:13,e:5,title:"Fishsticks",chars:["Cartman","Kanye West"],tags:["Fishsticks","Kanye West","Witz"],desc:"Cartman klaut einen simplen Fischstäbchen-Witz und beobachtet fasziniert, wie ein bekannter Rapper ihn völlig missversteht."},
+{s:13,e:6,title:"Pinewood Derby",chars:["Randy","Stan"],tags:["Pfadfinder","Autorennen"],desc:"Randy betrügt beim Pfadfinder-Autorennen und gerät dabei tief in kriminelle Machenschaften."},
+{s:13,e:7,title:"Fatbeard",chars:["Cartman"],tags:["Piraten","Somalia"],desc:"Cartman will unbedingt als Pirat berühmt werden und plant eine Reise nach Somalia."},
+{s:13,e:8,title:"Dead Celebrities",chars:["Kyle","Ike"],tags:["Geister","Promis"],desc:"Kürzlich verstorbene Prominente spuken in einem Haus in South Park."},
+{s:13,e:9,title:"Butters' Bottom Bitch",chars:["Butters"],tags:["Missverständnis","Straße"],desc:"Ein Missverständnis führt dazu, dass Butters unwissentlich zum Zuhälter für Mädchen wird."},
+{s:13,e:10,title:"W.T.F.",chars:["Cartman","Jimmy"],tags:["Wrestling"],desc:"Eine Wrestling-Parodie, bei der die Jungs ihre eigene Liga gründen wollen."},
+{s:13,e:11,title:"Whale Whores",chars:["Cartman","Stan"],tags:["Walfang","Japan","Free Willzyx"],desc:"Stan bekämpft nach seiner Willzyx-Erfahrung leidenschaftlich den internationalen Walfang, was in einer Japan-Reise gipfelt."},
+{s:13,e:12,title:"The F Word",chars:["Stan","Kyle"],tags:["Motorräder","Lärm"],desc:"Lärmende Motorradfahrer sorgen für einen Bedeutungswandel eines bekannten Schimpfworts in der Stadt."},
+{s:13,e:13,title:"Dances with Smurfs",chars:["Wendy","Bebe"],tags:["Schulsprecherwahl","Avatar-Parodie"],desc:"Eine Schulsprecherwahl wird liebevoll als Parodie auf einen bekannten 3D-Blockbuster inszeniert."},
+{s:13,e:14,title:"Pee",chars:["Cartman","Kyle"],tags:["Wasserpark"],desc:"Ein Ausflug in einen Wasserpark wird von Gerüchten über verunreinigtes Wasser überschattet."},
+// ---- Staffel 14 (2010) ----
+{s:14,e:1,title:"Sexual Healing",chars:["Kyle","Butters","Randy"],tags:["Sexsucht","Tiger Woods"],desc:"Eine angebliche Sexsucht-Epidemie erfasst berühmte Männer &ndash; inklusive einer Randy-Nebenhandlung um ein gewalttätiges Golfspiel."},
+{s:14,e:2,title:"The Tale of Scrotie McBoogerballs",chars:["Stan","Kyle"],tags:["Verlorenes Buch","Skandal"],desc:"Ein wiederentdecktes Kinderbuchmanuskript aus alten Zeiten sorgt für einen landesweiten Skandal."},
+{s:14,e:3,title:"Medicinal Fried Chicken",chars:["Cartman","Randy"],tags:["Verbot","Medizin-Apotheke"],desc:"Verbotenes frittiertes Hähnchen wird geschmuggelt, während medizinische Marihuana-Apotheken die Stadt fluten."},
+{s:14,e:4,title:"You Have 0 Friends",chars:["Stan","Kyle"],tags:["Soziales Netzwerk","Sucht"],desc:"Eine Satire auf die Sucht nach sozialen Netzwerken und digitaler Freundschaft."},
+{s:14,e:5,title:"200",chars:["Cartman","alle Promis"],tags:["Jubiläum","Promis"],desc:"Jubiläumsfolge: Sämtliche im Laufe der Serie verspottete Prominente verklagen gemeinsam die Stadt."},
+{s:14,e:6,title:"201",chars:["Cartman","Mohammed"],tags:["Mohammed","Kontroverse"],desc:"Direkte Fortsetzung von '200', die in eine besonders kontroverse Mohammed-Debatte mündet."},
+{s:14,e:7,title:"Crippled Summer",chars:["Towlie","Jimmy"],tags:["Towlie","Handtuch","Kiffen","Videospielkonsole"],desc:"Um Towlie überhaupt zu helfen, startet in der Stadt eine schräge Intervention gegen seine Kiffsucht, während Jimmy sich bei den Sommerspielen behaupten muss."},
+{s:14,e:8,title:"Poor and Stupid",chars:["Cartman"],tags:["Nascar","Rennsport"],desc:"Cartman will unbedingt Nascar-Rennfahrer werden, um schnell reich zu werden."},
+{s:14,e:9,title:"It's a Jersey Thing",chars:["Randy","Stan"],tags:["New Jersey","Klischee"],desc:"Klischeehafte Familien aus New Jersey überrennen die Stadt South Park."},
+{s:14,e:10,title:"Insheeption",chars:["Cartman"],tags:["Inception-Parodie","Träume"],desc:"Eine Traum-im-Traum-Parodie, die sich tief in Cartmans Unterbewusstsein vorwagt."},
+{s:14,e:11,title:"Coon 2: Hindsight",chars:["Cartman","Kenny"],tags:["Mysterion","Coon and Friends","Superheld"],desc:"Zweiter Teil der Superhelden-Trilogie: Die Coon-and-Friends-Truppe wächst, doch Cartman will unbedingt der Anführer sein."},
+{s:14,e:12,title:"Mysterion Rises",chars:["Kenny","Cartman"],tags:["Mysterion","Superheld"],desc:"Mysterions wahre Identität und Geheimnisse rücken in dieser Fortsetzung ins Zentrum."},
+{s:14,e:13,title:"Coon vs. Coon and Friends",chars:["Cartman","Kenny"],tags:["Superheld","Finale"],desc:"Das Finale der Superhelden-Trilogie treibt den Konflikt zwischen The Coon und den anderen auf die Spitze."},
+{s:14,e:14,title:"Crème Fraîche",chars:["Randy","Sharon"],tags:["Kochshow","Ehe"],desc:"Randy wird besessen von Kochshows, was seine Ehe mit Sharon auf eine harte Probe stellt."},
+// ---- Staffel 15 (2011) ----
+{s:15,e:1,title:"HUMANCENTiPAD",chars:["Kyle"],tags:["Apple","Human Centipede","Horror"],desc:"Kyle installiert versehentlich ein zwielichtiges iTunes-Update und wacht als Teil eines grotesken Apple-Experiments auf."},
+{s:15,e:2,title:"Funnybot",chars:["Stan","Cartman"],tags:["Roboter","Comedy-Wettbewerb"],desc:"Ein deutscher Comedy-Roboter sorgt bei einem Wettbewerb für ein regelrechtes Massaker."},
+{s:15,e:3,title:"Royal Pudding",chars:["Kenny"],tags:["Königshochzeit","Parodie"],desc:"Eine Parodie auf eine aufwendig inszenierte, weltweit übertragene Königshochzeit."},
+{s:15,e:4,title:"T.M.I.",chars:["Stan","Cartman"],tags:["Vergleich","Panik"],desc:"Ein unfreiwilliger Größenvergleich unter den Jungs löst regelrechte Panik in der Schule aus."},
+{s:15,e:5,title:"Crack Baby Athletic Association",chars:["Cartman"],tags:["Vermarktung","Drogenbabys"],desc:"Cartman vermarktet drogenabhängige Babys als eine neue Art von Extremsportlern."},
+{s:15,e:6,title:"City Sushi",chars:["Chef-Nachfolger"],tags:["Sushi","Multiple Persönlichkeit"],desc:"Ein Sushi-Koch mit multipler Persönlichkeitsstörung sorgt für Verwirrung im örtlichen Restaurant."},
+{s:15,e:7,title:"You're Getting Old",chars:["Stan","Randy"],tags:["Erwachsenwerden","Zynisch","Scheidung"],desc:"Stan findet plötzlich alles um ihn herum nur noch 'Kacke' &ndash; eine ungewohnt ernste Folge über Zynismus und Erwachsenwerden."},
+{s:15,e:8,title:"Ass Burgers",chars:["Stan"],tags:["Diagnose","Zynismus"],desc:"Stans neu entdeckter Zynismus wird fälschlich als medizinische Diagnose vermarktet."},
+{s:15,e:9,title:"The Last of the Meheecans",chars:["Cartman","Butters"],tags:["Grenze","Parodie"],desc:"Eine Grenzschutz-Parodie, bei der sich Cartman als offizieller Grenzbeamter ausgibt."},
+{s:15,e:10,title:"Bass to Mouth",chars:["Cartman","Schule"],tags:["Anonymes Blog","Gerüchte"],desc:"Ein anonymes Enthüllungs-Blog erschüttert mit pikanten Gerüchten die gesamte Schule."},
+{s:15,e:11,title:"Broadway Bro Down",chars:["Randy","Stan"],tags:["Musical","Vater"],desc:"Stans Vater entdeckt seine Liebe zu Broadway-Musicals &ndash; zum Entsetzen seines Sohnes."},
+{s:15,e:12,title:"1%",chars:["Cartman"],tags:["Cholesterin","Fitness","Ungleichheit"],desc:"Cartmans besorgniserregende Cholesterinwerte lösen eine Debatte über Fitness und soziale Ungleichheit aus."},
+{s:15,e:13,title:"A History Channel Thanksgiving",chars:["Stan","Kyle"],tags:["Thanksgiving","Geschichtsdoku"],desc:"Eine Geschichtsdoku-Parodie erzählt die dramatisierte Vorgeschichte des amerikanischen Thanksgiving-Fests."},
+{s:15,e:14,title:"The Poor Kid",chars:["Kenny"],tags:["Pflegefamilie","Armut"],desc:"Kennys Eltern werden verhaftet, und die Kinder der Familie landen vorübergehend in Pflegefamilien."},
+// ---- Staffel 16 (2012) ----
+{s:16,e:1,title:"Reverse Cowgirl",chars:["Stan","Randy"],tags:["Toilettenunfall","Gesetz"],desc:"Ein kurioser Toilettendeckel-Unfall sorgt landesweit für eine neue Gesetzesdebatte."},
+{s:16,e:2,title:"Cash for Gold",chars:["Randy"],tags:["Gold","Werbung","Alte Leute"],desc:"Randy startet ein zwielichtiges Gold-Ankauf-Geschäft und zielt dabei gezielt auf ältere, leichtgläubige Kunden ab."},
+{s:16,e:3,title:"Faith Hilling",chars:["Cartman"],tags:["Internet-Meme","Trend"],desc:"Ein plötzlicher Internet-Meme-Trend erobert im Rekordtempo die ganze Schule."},
+{s:16,e:4,title:"Jewpacabra",chars:["Cartman","Kyle"],tags:["Osterhase","Verschwörungstheorie"],desc:"Der Osterhasen-Mythos trifft auf eine hartnäckige Verschwörungstheorie über ein geheimnisvolles Fabelwesen."},
+{s:16,e:5,title:"Butterballs",chars:["Butters"],tags:["Mobbing","Großvater"],desc:"Butters wird ausgerechnet von seinem eigenen Großvater gemobbt und muss sich dagegen wehren."},
+{s:16,e:6,title:"I Should Have Never Gone Ziplining",chars:["Randy"],tags:["Abenteuer-Video","Christlich"],desc:"Eine Parodie auf überteuerte christliche Abenteuer-Reisevideos mit Randy in der Hauptrolle."},
+{s:16,e:7,title:"Cartman Finds Love",chars:["Cartman","Butters"],tags:["Verkuppeln"],desc:"Cartman versucht, zwei Mitschüler zu verkuppeln &ndash; mit fragwürdigen Motiven im Hintergrund."},
+{s:16,e:8,title:"Sarcastaball",chars:["Randy","Stan"],tags:["American Football","Sicherheit"],desc:"Eine neue, kontaktlose American-Football-Variante soll das Spiel angeblich sicherer machen."},
+{s:16,e:9,title:"Raising the Bar",chars:["Cartman","Randy"],tags:["Fettleibigkeit","Norm"],desc:"Fettleibigkeit wird in der Stadt kurzerhand zur neuen gesellschaftlichen Norm erklärt."},
+{s:16,e:10,title:"Insecurity",chars:["Stadtbewohner"],tags:["Schlafwandeln","Finanzkrise"],desc:"Schlafwandelnde Stadtbewohner dienen als Metapher für eine schwelende Finanzkrise."},
+{s:16,e:11,title:"Going Native",chars:["Butters"],tags:["Hawaii","Wurzeln"],desc:"Butters reist auf Spurensuche zu seinen hawaiianischen Wurzeln."},
+{s:16,e:12,title:"A Nightmare on FaceTime",chars:["Randy","Stan"],tags:["Videotelefonie","Horror-Parodie"],desc:"Eine Horrorfilm-Parodie rund um gruselige Erlebnisse mit einer neuen Videotelefonie-Funktion."},
+{s:16,e:13,title:"A Scause for Applause",chars:["Stan","Randy"],tags:["Solidaritätsarmbänder","Spendenwahn"],desc:"Ein regelrechter Wahn um Solidaritätsarmbänder erfasst die gesamte Stadt South Park."},
+{s:16,e:14,title:"Obama Wins!",chars:["Stan","Cartman"],tags:["Wahlnacht","Politik"],desc:"Eine chaotische Wahlnacht rund um eine historische US-Präsidentschaftswahl."},
+// ---- Staffel 17 (2013) ----
+{s:17,e:1,title:"Let Go, Let Gov",chars:["Cartman"],tags:["Überwachung","Geheimdienst"],desc:"Eine Satire auf staatliche Überwachungsprogramme und ihre Rechtfertigung."},
+{s:17,e:2,title:"Informative Murder Porn",chars:["Randy","Sharon"],tags:["True Crime","Eltern"],desc:"Die Eltern der Stadt werden regelrecht süchtig nach True-Crime-Dokumentationen."},
+{s:17,e:3,title:"World War Zimmerman",chars:["Cartman"],tags:["Verfolgungswahn","Gesellschaftskritik"],desc:"Nach einem aufsehenerregenden Gerichtsprozess entwickelt Cartman einen absurden Verfolgungswahn."},
+{s:17,e:4,title:"Goth Kids 3: Dawn of the Posers",chars:["Goth Kids"],tags:["Vampire","Grufti-Szene"],desc:"Ein neuer Vampir-Trend bedroht den Status der echten Grufti-Kids der Schule."},
+{s:17,e:5,title:"Taming Strange",chars:["Randy","Kenny"],tags:["Elektrizität","Drohnen"],desc:"Randy verwandelt sich in einen dubiosen 'Stromflüsterer', während Kenny mit einem neuen Freund experimentiert."},
+{s:17,e:6,title:"Ginger Cow",chars:["Cartman"],tags:["Nahost-Konflikt","Kuh"],desc:"Ein Nahost-Konflikt dreht sich völlig absurd um eine einzelne ingwerfarbene Kuh."},
+{s:17,e:7,title:"Black Friday",chars:["Stan","Kyle","Cartman"],tags:["Konsolenkrieg","Shopping"],desc:"Ein erbitterter Konsolenkrieg zwischen den Jungs eskaliert ausgerechnet am Black Friday."},
+{s:17,e:8,title:"A Song of Ass and Fire",chars:["Randy","Stan"],tags:["Game of Thrones-Parodie","Vorbestellung"],desc:"Eine Fantasy-Serien-Parodie rund um die fieberhafte Vorbestellung einer neuen Spielkonsole."},
+{s:17,e:9,title:"Titties and Dragons",chars:["Randy","Stan"],tags:["Game of Thrones-Parodie"],desc:"Fortsetzung der Fantasy-Serien-Parodie mit weiterer Eskalation des Konsolenkriegs."},
+{s:17,e:10,title:"The Hobbit",chars:["Wendy"],tags:["Bildbearbeitung","Schönheitsideal"],desc:"Wendy gerät wegen bearbeiteter Fotos in eine Debatte über unrealistische Schönheitsideale."},
+// ---- Staffel 18 (2014) ----
+{s:18,e:1,title:"Go Fund Yourself",chars:["Cartman","Stan","Kyle"],tags:["Crowdfunding","Washington Redskins","Startup"],desc:"Die Jungs gründen eine eigene Firma namens South Park und nutzen dafür schamlos den Streit um einen umstrittenen Sport-Markennamen."},
+{s:18,e:2,title:"Gluten Free Ebola",chars:["Cartman","Randy"],tags:["Glutenfrei","Hysterie"],desc:"Eine Glutenfrei-Hysterie trifft in der Stadt auf eine parallele Angst vor einer gefährlichen Krankheit."},
+{s:18,e:3,title:"The Cissy",chars:["Cartman"],tags:["Vorgetäuschte Identität","Toiletten"],desc:"Cartman gibt sich als Transgender aus, um sich Vorteile im Alltag zu verschaffen."},
+{s:18,e:4,title:"Handicar",chars:["Cartman","Timmy"],tags:["Fahrdienst","Konkurrenz"],desc:"Cartman gründet einen eigenen Fahrdienst und gerät damit in Konkurrenz zu etablierten Anbietern."},
+{s:18,e:5,title:"The Magic Bush",chars:["Randy"],tags:["Marihuana","Legalisierung"],desc:"Die Legalisierungsdebatte um Marihuana bringt Randys geheimen Anbau ans Licht."},
+{s:18,e:6,title:"Freemium Isn't Free",chars:["Stan"],tags:["Handyspiel","Mikrotransaktionen"],desc:"Eine Satire auf süchtig machende Handyspiele mit versteckten Kosten."},
+{s:18,e:7,title:"Grounded Vindaloop",chars:["Stan","Kyle"],tags:["Virtual Reality","Streich"],desc:"Ein ausgeklügelter Virtual-Reality-Streich sorgt bei den Jungs für völlige Verwirrung über die Realität."},
+{s:18,e:8,title:"Cock Magic",chars:["Randy"],tags:["Sammelkartenspiel","Zauberer"],desc:"Eine Parodie auf populäre Sammelkartenspiele, bei der Randy sich als Zauberer versucht."},
+{s:18,e:9,title:"#REHASH",chars:["PC Principal"],tags:["Social Media","Rückblick"],desc:"Eine Social-Media-Rückblick-Folge, die zugleich die Vorgeschichte von PC Principal andeutet."},
+{s:18,e:10,title:"#HappyHolograms",chars:["Stan","Cartman"],tags:["Hologramm-Konzert","Weihnachten"],desc:"Ein Hologramm-Konzert eines verstorbenen Popstars sorgt für ein ungewöhnliches Weihnachtsfest."},
+// ---- Staffel 19 (2015) ----
+{s:19,e:1,title:"Stunning and Brave",chars:["PC Principal","Cartman"],tags:["PC Principal","Political Correctness","Rektor"],desc:"Ein neuer, extrem durchtrainierter Rektor namens PC Principal übernimmt die Schule und setzt politische Korrektheit mit Gewalt durch."},
+{s:19,e:2,title:"Where My Country Gone?",chars:["Cartman","Randy"],tags:["Einwanderung","Grenzstadt"],desc:"Eine Einwanderungs-Satire verwandelt South Park selbst in eine umkämpfte Grenzstadt."},
+{s:19,e:3,title:"The City Part of Town",chars:["Randy","Stan"],tags:["Gentrifizierung","SoDoSoPa"],desc:"Ein neues, hippes Stadtviertel bringt Gentrifizierung nach South Park."},
+{s:19,e:4,title:"You're Not Yelping",chars:["Cartman","Kyle"],tags:["Online-Rezensionen"],desc:"Die Macht von Online-Restaurantbewertungen wird als Waffe gegen die Stadt eingesetzt."},
+{s:19,e:5,title:"Safe Space",chars:["Cartman","Butters"],tags:["Social Media","Safe Space","Mobbing"],desc:"Cartman kann Kritik im Internet nicht ertragen und will die ganze Stadt in einen wortwörtlichen 'sicheren Raum' verwandeln."},
+{s:19,e:6,title:"Tweek x Craig",chars:["Tweek","Craig"],tags:["Fan Fiction","Paarung"],desc:"Eine im Internet erfundene Paarung zweier Mitschüler wird plötzlich zur realen Schulangelegenheit."},
+{s:19,e:7,title:"Naughty Ninjas",chars:["Randy","Cartman"],tags:["Polizeigewalt","Ninja-Alarm"],desc:"Ein falscher Ninja-Alarm entfacht eine hitzige Debatte über Polizeigewalt in der Stadt."},
+{s:19,e:8,title:"Sponsored Content",chars:["Jimmy","Schülerzeitung"],tags:["Native Advertising","Schulzeitung"],desc:"Getarnte Werbung unterwandert schleichend die eigentlich unabhängige Schülerzeitung."},
+{s:19,e:9,title:"Truth and Advertising",chars:["Werbefiguren"],tags:["Werbefiguren","Übernahme"],desc:"Lebendig gewordene Werbefiguren übernehmen zunehmend die Kontrolle über die Stadt."},
+{s:19,e:10,title:"PC Principal Final Justice",chars:["PC Principal","Cartman"],tags:["PC Principal","Finale"],desc:"Das Staffelfinale löst endlich das Rätsel um die wahre Identität von PC Principal auf."},
+// ---- Staffel 20 (2016) ----
+{s:20,e:1,title:"Member Berries",chars:["Randy","Gerald"],tags:["Member Berries","Nostalgie","Wahl"],desc:"Eine mysteriöse Beere lässt jeden nur noch nostalgisch 'weißte noch...' murmeln &ndash; Auftakt einer Staffel rund um Wahlkampf-Nostalgie."},
+{s:20,e:2,title:"Skank Hunt",chars:["Gerald"],tags:["Skankhunt42","Troll","Internet"],desc:"Gerald trollt anonym als 'Skankhunt42' andere Nutzer im Netz &ndash; mit Folgen, die weit über den Bildschirm hinausgehen."},
+{s:20,e:3,title:"The Damned",chars:["Gerald","Kyle"],tags:["Troll-Krieg","Internet"],desc:"Ein eskalierender Online-Troll-Krieg bedroht ganze Familien in der Stadt."},
+{s:20,e:4,title:"Wieners Out",chars:["Randy","Stan"],tags:["Exhibitionismus","Wettlauf"],desc:"Ein skurriler exhibitionistischer Wettlauf sorgt für Aufsehen in der ganzen Stadt."},
+{s:20,e:5,title:"Douche and a Danish",chars:["Gerald"],tags:["Hacker","Agent"],desc:"Ein dänischer Agent ermittelt hartnäckig gegen den anonymen Internet-Troll der Stadt."},
+{s:20,e:6,title:"Fort Collins",chars:["Randy"],tags:["Pendeln","Marihuana"],desc:"Randy pendelt heimlich in eine andere Stadt, um dort seiner geheimen Marihuana-Arbeit nachzugehen."},
+{s:20,e:7,title:"Oh, Jeez",chars:["Randy","Gerald"],tags:["Präsidentschaftswahl","Douche vs Turd"],desc:"Eine US-Präsidentschaftswahl wird als Wiederholung eines alten 'Douche gegen Turd'-Dilemmas inszeniert."},
+{s:20,e:8,title:"Members Only",chars:["Randy","Gerald"],tags:["Nostalgie-Sucht"],desc:"Die Sucht nach nostalgischen Erinnerungsbeeren erreicht in der Stadt einen neuen Höhepunkt."},
+{s:20,e:9,title:"Not Funny",chars:["Jimmy"],tags:["Humorverlust"],desc:"Jimmy verliert auf mysteriöse Weise seinen Sinn für Humor und damit auch seine Identität."},
+{s:20,e:10,title:"The End of Serialization as We Know It",chars:["Randy","Gerald"],tags:["Staffelfinale","Wahlnacht"],desc:"Das Staffelfinale löst die Wahlnacht-Handlung rund um Nostalgie und Trollerei endgültig auf."},
+// ---- Staffel 21 (2017) ----
+{s:21,e:1,title:"White People Renovating Houses",chars:["Randy","Gerald"],tags:["Häuser renovieren","Nachbarschaft"],desc:"Eine Immobilien-Show-Parodie: Die Eltern der Stadt liefern sich einen absurden Wettstreit ums perfekte Haus-Upgrade."},
+{s:21,e:2,title:"Put It Down",chars:["Cartman"],tags:["Zensur","Politik"],desc:"Ein kontroverser politischer Tweet löst eine hitzige Zensurdebatte in der Stadt aus."},
+{s:21,e:3,title:"Holiday Special",chars:["Randy","Sharon"],tags:["Genom-Editierung","Baby"],desc:"Eine neue Gentechnik-Methode sorgt für Streit um das perfekte, designte Baby."},
+{s:21,e:4,title:"Franchise Prequel",chars:["Cartman"],tags:["Firmenimperium","Geruchsentferner"],desc:"Cartman baut ein wachsendes Firmenimperium rund um einen Katzenpisse-Geruchsentferner auf."},
+{s:21,e:5,title:"Hummels & Heroin",chars:["Randy","Sharon"],tags:["Opioid-Krise"],desc:"Eine landesweite Opioid-Krise erreicht die scheinbar heile Vorstadt-Elterngeneration von South Park."},
+{s:21,e:6,title:"Sons a Witches",chars:["Randy","Väter"],tags:["Halloween","Hexenprozess"],desc:"Ein Halloween-Elternabend eskaliert zu einem regelrechten modernen Hexenprozess."},
+{s:21,e:7,title:"Doubling Down",chars:["Mr. Garrison"],tags:["Politik-Parodie"],desc:"Eine politische Führungsfigur der Stadt wird in dieser Folge auf ungewöhnliche Weise 'verdoppelt'."},
+{s:21,e:8,title:"Moss Piglets",chars:["Jimmy","Timmy"],tags:["Wissenschaftsmesse","Bärtierchen"],desc:"Eine Schul-Wissenschaftsmesse dreht sich überraschend um winzige, extrem widerstandsfähige Bärtierchen."},
+{s:21,e:9,title:"Super Hard PCness",chars:["PC Principal"],tags:["PC Principal","Bruder"],desc:"Ein bislang unbekannter Bruder von PC Principal taucht überraschend in der Stadt auf."},
+{s:21,e:10,title:"Splatty Tomato",chars:["Stan","Randy"],tags:["Herbstfest","Staffelfinale"],desc:"Das Staffelfinale lässt ein traditionelles Herbstfest völlig außer Kontrolle geraten."},
+// ---- Staffel 22 (2018) ----
+{s:22,e:1,title:"Dead Kids",chars:["Schule","Eltern"],tags:["Amoklauf-Debatte","Geisterfolge"],desc:"Eine ernste gesellschaftliche Debatte wird ungewöhnlich als Geister-Geschichte erzählt."},
+{s:22,e:2,title:"A Boy and a Priest",chars:["Butters","Priester"],tags:["Missbrauchsskandal","Flucht"],desc:"Eine Satire auf Missbrauchsskandale, bei der Butters mit einem Priester auf der Flucht ist."},
+{s:22,e:3,title:"The Problem with a Poo",chars:["Mr. Hankey"],tags:["Mr Hankey","Cancel Culture","Weihnachten"],desc:"Mr. Hankey gerät wegen seines Namens in eine moderne Cancel-Culture-Debatte."},
+{s:22,e:4,title:"Tegridy Farms",chars:["Randy"],tags:["Tegridy Farms","Marihuana","Farm"],desc:"Randy gründet seine berühmt-berüchtigte Marihuana-Farm namens Tegridy Farms außerhalb der Stadt."},
+{s:22,e:5,title:"The Scoots",chars:["Stan","Kyle"],tags:["E-Scooter","Verletzungen"],desc:"Ein plötzlicher E-Scooter-Trend sorgt in der Stadt für jede Menge Verletzungen."},
+{s:22,e:6,title:"Time to Get Cereal",chars:["Al Gore"],tags:["ManBearPig","Rückkehr"],desc:"Nach Jahren des Spotts stellt sich heraus, dass ManBearPig tatsächlich real ist und zurückkehrt."},
+{s:22,e:7,title:"Nobody Got Cereal?",chars:["Al Gore","Cartman"],tags:["ManBearPig","Eskalation"],desc:"Der reale ManBearPig-Angriff eskaliert in dieser direkten Fortsetzung weiter."},
+{s:22,e:8,title:"Buddha Box",chars:["Randy","Sharon"],tags:["Meditation","Gadget"],desc:"Ein neuer Meditations-Lautsprecher wird in der Stadt zum unerwarteten Verkaufstrend."},
+{s:22,e:9,title:"Unfulfilled",chars:["Randy"],tags:["Versandlager","Arbeitsbedingungen"],desc:"Ein großes Versandlagerhaus eröffnet in South Park und bringt neue Arbeitsplätze &ndash; und Probleme."},
+{s:22,e:10,title:"Bike Parade",chars:["Randy","Stan"],tags:["Tegridy Farms","Fahrradparade","Staffelfinale"],desc:"Das Staffelfinale rund um Tegridy Farms mündet in eine chaotische Fahrradparade."},
+// ---- Staffel 23 (2019) ----
+{s:23,e:1,title:"Mexican Joker",chars:["Cartman","Randy"],tags:["Grenze","Mauer","Tegridy Farms"],desc:"Staffelauftakt rund um Grenzpolitik-Satire, während Randys Marihuana-Farm Tegridy Farms weiter im Mittelpunkt steht."},
+{s:23,e:2,title:"Band in China",chars:["Stan","Cartman"],tags:["China","Zensur","Musik"],desc:"South Parks Schulband tourt durch China und stößt dabei auf strenge Zensurregeln."},
+{s:23,e:3,title:"Shots!!!",chars:["Eltern","Schule"],tags:["Impfpflicht"],desc:"Eine hitzige Debatte um Impfpflicht an der Schule spaltet die Elternschaft."},
+{s:23,e:4,title:"Let Them Eat Goo",chars:["Schule"],tags:["Veganes Essen","Insekten"],desc:"Die Einführung veganer Insekten-Nahrung an der Schule sorgt für gemischte Reaktionen."},
+{s:23,e:5,title:"Tegridy Farms Halloween Special",chars:["Randy"],tags:["Tegridy Farms","Halloween"],desc:"Randys Marihuana-Farm sorgt auch zu Halloween wieder für allerlei Chaos."},
+{s:23,e:6,title:"Season Finale",chars:["Randy"],tags:["Tegridy Farms","Fortsetzung"],desc:"Die Tegridy-Farms-Handlung der Staffel findet hier ihre nächste Wendung."},
+{s:23,e:7,title:"Board Girls",chars:["PC Principal"],tags:["Transgender","Schulsport"],desc:"Eine Debatte um Fairness im Schulsport spitzt sich zu, als eine erwachsene Wrestlerin am Mädchenwettbewerb teilnimmt."},
+{s:23,e:8,title:"Turd Burglars",chars:["Mütter"],tags:["Trend","Mütter"],desc:"Ein fragwürdiger neuer Gesundheitstrend unter den Müttern der Stadt sorgt für Aufsehen."},
+{s:23,e:9,title:"Basic Cable",chars:["Randy","Stan"],tags:["Streamingdienst","Wechsel"],desc:"Eine Satire auf den ständigen Wechsel zwischen konkurrierenden Streamingdiensten."},
+{s:23,e:10,title:"Christmas Snow",chars:["Randy"],tags:["Tegridy Farms","Weihnachten","Staffelfinale"],desc:"Das Staffelfinale bringt die Tegridy-Farms-Handlung zu einem weihnachtlichen Abschluss."},
+// ---- Staffel 24 (2020-2021, nur 2 reguläre Folgen wegen Corona) ----
+{s:24,e:1,title:"The Pandemic Special",chars:["Randy","Cartman"],tags:["Pandemie","Corona","Sonderfolge"],desc:"Sonderfolge mitten in der echten Pandemie: South Park im Lockdown, samt Maskenpflicht und Randys fragwürdiger Rolle dabei."},
+{s:24,e:2,title:"South ParQ Vaccination Special",chars:["Randy","Cartman"],tags:["Impfung","Verschwörung"],desc:"Eine Verschwörungstheorie-Parodie rund um Impfstoffe und eine bekannte Online-Bewegung."},
+// ---- Specials 2021 ----
+{s:0,e:1,title:"South Park: Post COVID",chars:["Stan","Kyle","Cartman"],tags:["Zukunft","Special","Erwachsene Jungs"],desc:"Eine Zukunftsvision zeigt die Hauptfiguren als erwachsene Männer nach der Pandemie."},
+{s:0,e:2,title:"South Park: Post COVID: The Return of COVID",chars:["Stan","Kyle","Cartman"],tags:["Zukunft","Special","Neue Welle"],desc:"Direkte Fortsetzung des Zukunfts-Specials mit einer neuen, überraschenden Pandemie-Wendung."},
+// ---- Staffel 25 (2022) ----
+{s:25,e:1,title:"Pajama Day",chars:["Schule"],tags:["Schulaktionstag","Kontroverse"],desc:"Ein harmloser Pyjama-Aktionstag an der Schule gerät unerwartet zur handfesten Kontroverse."},
+{s:25,e:2,title:"The Big Fix",chars:["Randy"],tags:["Wasserkrise","Lösung"],desc:"Randy versucht, eine Wasserkrise der Stadt mit einer höchst fragwürdigen Methode zu lösen."},
+{s:25,e:3,title:"City People",chars:["Randy","Neu-Zugezogene"],tags:["Zuzügler","Stadtleben"],desc:"Großstädtische Neuankömmlinge verändern spürbar das Leben in der kleinen Bergstadt."},
+{s:25,e:4,title:"Back to the Cold War",chars:["Randy","Stan"],tags:["Ukraine","Kalter Krieg"],desc:"Eine internationale Konfliktlage weckt in der Stadt alte Kalter-Krieg-Ängste."},
+{s:25,e:5,title:"Help, My Teenager Hates Me!",chars:["Randy","Stan"],tags:["Reality-TV","Erziehung"],desc:"Eine Reality-TV-Erziehungshilfe-Parodie stellt die Beziehung zwischen Eltern und Teenagern auf die Probe."},
+{s:25,e:6,title:"Credigree Weed St. Patrick's Day Special",chars:["Randy"],tags:["Marihuana","Konkurrenz"],desc:"Ein Konkurrenzkampf zwischen rivalisierenden Marihuana-Firmen eskaliert zum St. Patrick's Day."},
+// ---- Specials 2022 ----
+{s:0,e:3,title:"South Park: The Streaming Wars",chars:["Randy","Stan"],tags:["Wasserkrise","Streamingdienst","Special"],desc:"Eine Wasserkrise der Stadt verschmilzt mit einer bissigen Satire auf den Streaming-Wettbewerb, Teil eins."},
+{s:0,e:4,title:"South Park: The Streaming Wars Part 2",chars:["Randy","Stan"],tags:["Wasserkrise","Streamingdienst","Special"],desc:"Die direkte Fortsetzung führt die Wasserkrisen- und Streaming-Satire zu ihrem Abschluss."},
+// ---- Staffel 26 (2023) ----
+{s:26,e:1,title:"Cupid Ye",chars:["Cartman"],tags:["Kanye West","Valentinstag"],desc:"Eine Parodie auf einen bekannten Rapper und seine öffentlichen Skandale zum Valentinstag."},
+{s:26,e:2,title:"The Worldwide Privacy Tour",chars:["Kyle"],tags:["Königsfamilie","Presse-Parodie"],desc:"Eine Parodie auf eine bekannte britische Königsfamilie auf ausgedehnter Presse-Privatsphäre-Tour."},
+{s:26,e:3,title:"Japanese Toilet",chars:["Randy"],tags:["High-Tech-Toilette","Abhängigkeit"],desc:"Eine High-Tech-Toilette sorgt bei Randy für eine ungesunde neue Abhängigkeit."},
+{s:26,e:4,title:"Deep Learning",chars:["Stan","Kyle"],tags:["ChatGPT","Künstliche Intelligenz"],desc:"Eine KI-Chat-Satire, bei der Textnachrichten an Freundinnen plötzlich von einer künstlichen Intelligenz verfasst werden."},
+{s:26,e:5,title:"DikinBaus Hot Dogs",chars:["Randy"],tags:["Restaurantkette","Konkurrenz"],desc:"Eine neue Restaurantkette sorgt für erbitterte Konkurrenz zu einer bekannten Hooters-artigen Kette."},
+{s:26,e:6,title:"Spring Break",chars:["Liane"],tags:["Florida","Partyurlaub"],desc:"Cartmans Mutter gönnt sich einen ausgelassenen Partyurlaub in Florida."},
+// ---- Specials 2023/2024 ----
+{s:0,e:5,title:"South Park: Joining the Panderverse",chars:["Stan","Kyle","Cartman"],tags:["Streaming","Multiversum","Special"],desc:"Eine Multiversum-Parodie nimmt den Wettbewerb um vermeintlich 'woke' Streaming-Inhalte aufs Korn."},
+{s:0,e:6,title:"South Park (Not Suitable for Children)",chars:["Randy"],tags:["Sucht","Chaos","Special"],desc:"Randy gerät als suchtkranker Marihuana-Farmer tief in privates und berufliches Chaos."},
+{s:0,e:7,title:"South Park: The End of Obesity",chars:["Cartman","Randy"],tags:["Abnehmspritze","Ozempic","Special"],desc:"Eine Satire auf den Hype um moderne Abnehmspritzen und ihre gesellschaftlichen Folgen."},
+// ---- Staffel 27 (2025) ----
+{s:27,e:1,title:"Sermon on the 'Mount",chars:["Randy","Cartman"],tags:["Politik-Satire","Staffelauftakt"],desc:"Staffelauftakt mit bissiger Politik-Satire rund um einen umstrittenen Deal der Stadt."},
+{s:27,e:2,title:"Got a Nut",chars:["Randy"],tags:["Politik-Satire","Fortsetzung"],desc:"Die politische Satire-Handlung der Staffel setzt sich mit neuer Zuspitzung fort."},
+{s:27,e:3,title:"Sickofancy",chars:["Towlie","Randy"],tags:["Towlie","Tegridy Farms","Washington"],desc:"Um Tegridy Farms zu retten, macht sich ausgerechnet Towlie auf den Weg in ein hochgerüstetes Washington, D.C."},
+{s:27,e:4,title:"Wok Is Dead",chars:["Randy"],tags:["China-Restaurant","Satire"],desc:"Eine Satire rund um ein chinesisches Restaurant sorgt für neue Verwicklungen in der Stadt."},
+{s:27,e:5,title:"Conflict of Interest",chars:["Randy"],tags:["Interessenkonflikt","Politik"],desc:"Ein handfester Interessenkonflikt rund um Randys Geschäfte bildet den Abschluss der Staffel."},
+// ---- Staffel 28 (2025) ----
+{s:28,e:1,title:"Twisted Christian",chars:["Cartman"],tags:["Religiöse Rechte","Satire"],desc:"Eine Satire auf religiös-konservative Strömungen eröffnet die neue Staffel."},
+{s:28,e:2,title:"The Woman in the Hat",chars:["Stadtbewohner"],tags:["Mysteriöse Figur","Verschwörungstheorie"],desc:"Eine mysteriöse Figur mit auffälligem Hut sorgt für neue Verschwörungstheorien in der Stadt."},
+{s:28,e:3,title:"Sora Not Sorry",chars:["Stan","Kyle"],tags:["KI-Video","Sora"],desc:"Eine Satire auf KI-Videogeneratoren und ihre Auswirkungen auf die Stadt."},
+{s:28,e:4,title:"Turkey Trot",chars:["Stan","Randy"],tags:["Thanksgiving","Laufwettbewerb"],desc:"Ein Thanksgiving-Laufwettbewerb sorgt für unerwartetes Chaos in der Stadt."},
+{s:28,e:5,title:"The Crap Out",chars:["Cartman","Randy"],tags:["Staffelfinale"],desc:"Das Staffelfinale 2025 bringt die Handlungsstränge der Staffel zu einem turbulenten Abschluss."}
+];
+const DATA = EPISODES;
+
+const grid = document.getElementById('grid');
+const meta = document.getElementById('resultMeta');
+const empty = document.getElementById('empty');
+const input = document.getElementById('search');
+const clearBtn = document.getElementById('clearBtn');
+
+function pillClass(name){
+  const n = name.toLowerCase();
+  if(n.includes('cartman')) return 'p-cartman';
+  if(n.includes('stan')) return 'p-stan';
+  if(n.includes('kyle')) return 'p-kyle';
+  if(n.includes('kenny') || n.includes('towlie')) return 'p-kenny';
+  return 'p-other';
+}
+
+function norm(s){
+  return s.toLowerCase()
+    .replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/ß/g,'ss');
+}
+
+function render(list){
+  grid.innerHTML = '';
+  if(list.length === 0){
+    empty.classList.add('show');
+    meta.textContent = '';
+    return;
+  }
+  empty.classList.remove('show');
+  meta.innerHTML = list.length === DATA.length
+    ? `<b>${list.length}</b> Folgen &ndash; alle Staffeln, Specials inklusive. Einfach tippen, um zu filtern`
+    : `<b>${list.length}</b> Treffer`;
+
+  list.forEach(ep => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const seenLabels = new Set();
+    const dedupe = (arr) => arr.filter(x => {
+      const k = norm(x);
+      if(seenLabels.has(k)) return false;
+      seenLabels.add(k);
+      return true;
+    });
+    const charPills = dedupe(ep.chars).map(c => `<span class="pill ${pillClass(c)}">${c}</span>`).join('');
+    const tagPills = dedupe(ep.tags).slice(0,3).map(t => `<span class="pill p-other">${t}</span>`).join('');
+    card.innerHTML = `
+      <span class="tag-se">S${ep.s}E${ep.e}</span>
+      <h3>${ep.title}</h3>
+      <p class="desc">${ep.desc}</p>
+      <div class="charrow">${charPills}${tagPills}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function search(q){
+  const nq = norm(q.trim());
+  if(!nq){
+    render(DATA);
+    return;
+  }
+  const terms = nq.split(/\s+/).filter(Boolean);
+  const scored = DATA.map(ep => {
+    const hay = norm([ep.title, ...ep.chars, ...ep.tags, ep.desc, 'S'+ep.s+'E'+ep.e].join(' '));
+    let score = 0;
+    for(const t of terms){
+      if(!hay.includes(t)) return null;
+      if(norm(ep.title).includes(t)) score += 3;
+      if(ep.chars.some(c => norm(c).includes(t))) score += 3;
+      if(ep.tags.some(tag => norm(tag).includes(t))) score += 4;
+      score += 1;
+    }
+    return {ep, score};
+  }).filter(Boolean);
+  scored.sort((a,b) => b.score - a.score);
+  render(scored.map(s => s.ep));
+}
+
+input.addEventListener('input', () => {
+  clearBtn.classList.toggle('show', input.value.length > 0);
+  search(input.value);
+});
+clearBtn.addEventListener('click', () => {
+  input.value = '';
+  clearBtn.classList.remove('show');
+  search('');
+  input.focus();
+});
+document.getElementById('chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('.chip');
+  if(!btn) return;
+  input.value = btn.dataset.q;
+  clearBtn.classList.add('show');
+  search(input.value);
+  input.focus();
+});
+
+render(DATA);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
