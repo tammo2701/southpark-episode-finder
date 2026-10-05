@@ -80,8 +80,6 @@
     return u.replace(/\/+$/, '');
   }
 
-  // Modern Jellyfin 10.9 - 10.12 / 12.x+ Authorization Header:
-  // Uses standard `Authorization: MediaBrowser Client="...", Device="...", DeviceId="...", Version="...", Token="..."`
   function buildMediaBrowserAuthHeader(token) {
     const devId = getDeviceId();
     let hdr = `MediaBrowser Client="South Park Episode Finder", Device="Web Browser", DeviceId="${devId}", Version="1.2.0"`;
@@ -117,9 +115,6 @@
       : `Could not reach Jellyfin server at "${baseUrl}". Please check IP & port (e.g. :8096) and your network connection.`);
   }
 
-  // Core Jellyfin API caller supporting Jellyfin 10.8 -> 12.x+
-  // 1. Primary: Modern standard `Authorization: MediaBrowser ...` header (required when EnableLegacyAuthorization is false in Jellyfin 10.12 / 12.x).
-  // 2. Fallback: Legacy `X-Emby-Authorization` + `ApiKey` query parameter for older setups or strict proxies.
   async function jfFetch(path, options = {}) {
     const base = cleanServerUrl(jfConfig.serverUrl);
     if (!base) throw new Error('Server URL missing');
@@ -170,7 +165,7 @@
       }
     }
 
-    // Attempt 2: Query parameter `?ApiKey=...` without custom headers (for API key mode or endpoints that don't require session DeviceId)
+    // Attempt 2: Query parameter `?ApiKey=...` without custom headers
     if (token && !cleanPath.includes('/Users/AuthenticateByName')) {
       try {
         const urlWithKey = appendApiKeyToUrl(rawUrl, token);
@@ -190,7 +185,7 @@
       } catch (_) {}
     }
 
-    // Attempt 3: Both `Authorization` and `X-Emby-Authorization` (for older Jellyfin 10.8 / Emby compatibility)
+    // Attempt 3: Both `Authorization` and `X-Emby-Authorization`
     try {
       const dualHeaders = {
         'Accept': 'application/json',
@@ -220,6 +215,47 @@
     }
 
     throw new Error(`HTTP ${lastHttpStatus}: ${lastHttpErrorText || 'Error processing request'} (${cleanPath})`);
+  }
+
+  // Helper: Resolve the best User ID for reading Watched/Played status
+  // When using an API key without a username specified, picks the user matching username OR the user who actually has watched episodes.
+  async function resolveBestUserId() {
+    // 1. Try /Users/Me (works for user session tokens from AuthenticateByName)
+    try {
+      const me = await jfFetch('/Users/Me');
+      if (me && me.Id) {
+        jfConfig.userId = me.Id;
+        if (me.Name) jfConfig.username = me.Name;
+        return me.Id;
+      }
+    } catch (_) {}
+
+    // 2. Fetch all users via /Users
+    try {
+      const users = await jfFetch('/Users');
+      if (Array.isArray(users) && users.length > 0) {
+        if (jfConfig.username) {
+          const byName = users.find(u => (u.Name || '').toLowerCase() === jfConfig.username.toLowerCase());
+          if (byName && byName.Id) {
+            jfConfig.userId = byName.Id;
+            return byName.Id;
+          }
+        }
+        // Sort users by most recently active (LastActivityDate) so we pick the real main viewer account
+        const sorted = [...users].sort((a, b) => {
+          const tA = a.LastActivityDate ? new Date(a.LastActivityDate).getTime() : 0;
+          const tB = b.LastActivityDate ? new Date(b.LastActivityDate).getTime() : 0;
+          return tB - tA;
+        });
+        jfConfig.userId = sorted[0].Id;
+        if (!jfConfig.username && sorted[0].Name) {
+          jfConfig.username = sorted[0].Name;
+        }
+        return sorted[0].Id;
+      }
+    } catch (_) {}
+
+    return jfConfig.userId || '';
   }
 
   // Authenticate by Username & Password OR API Key
@@ -262,37 +298,13 @@
         throw new Error(isDe ? 'Bitte API-Key / Token eingeben.' : 'Please enter an API Key / Token.');
       }
       jfConfig.accessToken = apiKey;
-
-      // Resolve User ID:
-      // First try /Users/Me (works if the token is a user session token), then fallback to /Users (works for Admin API Keys)
-      let resolvedUserId = '';
-      try {
-        const me = await jfFetch('/Users/Me', { token: apiKey });
-        if (me && me.Id) {
-          resolvedUserId = me.Id;
-          jfConfig.username = me.Name || jfConfig.username;
-        }
-      } catch (_) {}
-
-      if (!resolvedUserId) {
-        try {
-          const users = await jfFetch('/Users', { token: apiKey });
-          if (Array.isArray(users) && users.length > 0) {
-            const matchUser = jfConfig.username
-              ? users.find(u => (u.Name || '').toLowerCase() === jfConfig.username.toLowerCase()) || users[0]
-              : users[0];
-            resolvedUserId = matchUser.Id;
-            jfConfig.username = matchUser.Name || jfConfig.username;
-          }
-        } catch (_) {}
-      }
-      jfConfig.userId = resolvedUserId;
+      await resolveBestUserId();
     }
 
     // 3. Scan South Park Series, Episodes & Played/Watched status in Jellyfin library
     await syncSouthParkEpisodes();
 
-    // 4. Fetch available TV / Cast Sessions
+    // 4. Fetch available active TV / Cast Sessions
     await refreshSessions().catch(() => []);
 
     jfConfig.connected = true;
@@ -300,88 +312,136 @@
     return jfConfig;
   }
 
-  // Fetches all South Park episodes from Jellyfin along with UserData.Played & UserData.IsFavorite
-  // Uses modern Jellyfin 10.9 - 12.x `/Items` and `/Shows/{seriesId}/Episodes` parameters
+  // Extract Season & Episode key ("S1E1") from Jellyfin item
+  function extractSeKey(item) {
+    let s = item.ParentIndexNumber !== undefined && item.ParentIndexNumber !== null ? Number(item.ParentIndexNumber) : -1;
+    let e = item.IndexNumber !== undefined && item.IndexNumber !== null ? Number(item.IndexNumber) : -1;
+    if (s >= 0 && e >= 0) {
+      return `S${s}E${e}`;
+    }
+    // Fallback: parse from Name or Path if SxxExx is present
+    const str = `${item.Name || ''} ${item.Path || ''}`;
+    const m = str.match(/[sS](\d{1,2})\s*[eExX](\d{1,2})/);
+    if (m) {
+      return `S${parseInt(m[1], 10)}E${parseInt(m[2], 10)}`;
+    }
+    return null;
+  }
+
+  // Fetches all South Park episodes + accurately syncs Played/Watched episodes from Jellyfin
+  // Uses BOTH UserData inspection AND explicit `Filters=IsPlayed` / `IsPlayed=true` query so watched count is 100% accurate across all Jellyfin versions!
   async function syncSouthParkEpisodes() {
     const epMap = {};
-    let watchedCount = 0;
 
     if (!jfConfig.serverUrl || !jfConfig.accessToken) {
       return epMap;
     }
 
     if (!jfConfig.userId) {
-      try {
-        const users = await jfFetch('/Users');
-        if (Array.isArray(users) && users.length > 0) {
-          jfConfig.userId = users[0].Id;
-        }
-      } catch (_) {}
+      await resolveBestUserId();
     }
 
-    const userParam = jfConfig.userId ? `userId=${encodeURIComponent(jfConfig.userId)}&` : '';
+    const uid = jfConfig.userId;
+    const userScopedItemsPath = uid ? `/Users/${encodeURIComponent(uid)}/Items` : '/Items';
+    const userQuery = uid ? `UserId=${encodeURIComponent(uid)}&userId=${encodeURIComponent(uid)}&` : '';
 
-    const recordItems = (items) => {
+    const recordItems = (items, forcePlayed = false) => {
       if (!Array.isArray(items)) return;
       for (const item of items) {
-        const s = item.ParentIndexNumber !== undefined ? item.ParentIndexNumber : -1;
-        const e = item.IndexNumber !== undefined ? item.IndexNumber : -1;
-        if (s >= 0 && e >= 0) {
-          const played = Boolean(item.UserData && item.UserData.Played);
-          const fav = Boolean(item.UserData && item.UserData.IsFavorite);
-          if (played && (!epMap[`S${s}E${e}`] || !epMap[`S${s}E${e}`].played)) {
-            watchedCount++;
-          }
-          epMap[`S${s}E${e}`] = {
-            id: item.Id,
-            name: item.Name || '',
-            played,
-            fav
-          };
-        }
+        const key = extractSeKey(item);
+        if (!key) continue;
+        const prev = epMap[key] || {};
+        const ud = item.UserData || {};
+        const played = Boolean(
+          forcePlayed ||
+          prev.played ||
+          ud.Played === true ||
+          (typeof ud.PlayCount === 'number' && ud.PlayCount > 0)
+        );
+        const fav = Boolean(prev.fav || ud.IsFavorite === true);
+        epMap[key] = {
+          id: item.Id || prev.id,
+          name: item.Name || prev.name || '',
+          played,
+          fav
+        };
       }
     };
 
     try {
-      // 1. Find South Park Series item via top-level /Items endpoint (compatible with Jellyfin 10.8 -> 12.x+)
-      const seriesRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Series&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}`);
+      // 1. Find South Park Series ID
+      const seriesRes = await jfFetch(`${userScopedItemsPath}?${userQuery}IncludeItemTypes=Series&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}`);
       const seriesList = (seriesRes && seriesRes.Items) || [];
       const spSeries = seriesList.find(s => (s.Name || '').toLowerCase().includes('south park')) || seriesList[0];
 
       if (spSeries && spSeries.Id) {
         jfConfig.seriesId = spSeries.Id;
-        // Fetch episodes for this series (UserData is included automatically when userId is passed)
+
+        // 2A. Fetch all episodes of South Park via User-scoped /Items with ParentId (reliably includes UserData in Jellyfin 10.8 -> 12.x)
         try {
-          const epsRes = await jfFetch(`/Shows/${encodeURIComponent(spSeries.Id)}/Episodes?${userParam}EnableUserData=true`);
-          recordItems((epsRes && epsRes.Items) || []);
-        } catch (_) {
-          // Fallback to /Items with ParentId if /Shows/{id}/Episodes throws 400 on custom setups
-          const epsFallback = await jfFetch(`/Items?${userParam}ParentId=${encodeURIComponent(spSeries.Id)}&IncludeItemTypes=Episode&Recursive=true&EnableUserData=true`);
-          recordItems((epsFallback && epsFallback.Items) || []);
+          const allEpsRes = await jfFetch(`${userScopedItemsPath}?${userQuery}ParentId=${encodeURIComponent(spSeries.Id)}&IncludeItemTypes=Episode&Recursive=true&EnableUserData=true&Limit=1000`);
+          recordItems((allEpsRes && allEpsRes.Items) || [], false);
+        } catch (_) {}
+
+        // 2B. Also fetch via /Shows/{seriesId}/Episodes if needed
+        if (Object.keys(epMap).length === 0) {
+          try {
+            const showsRes = await jfFetch(`/Shows/${encodeURIComponent(spSeries.Id)}/Episodes?${userQuery}EnableUserData=true&Limit=1000`);
+            recordItems((showsRes && showsRes.Items) || [], false);
+          } catch (_) {}
         }
+
+        // 3. Explicit Watched Query (`IsPlayed=true` & `Filters=IsPlayed`) for this Series!
+        // This guarantees that even if Jellyfin omits UserData on bulk /Shows responses, every watched episode is 100% marked as played.
+        try {
+          const playedRes = await jfFetch(`${userScopedItemsPath}?${userQuery}ParentId=${encodeURIComponent(spSeries.Id)}&IncludeItemTypes=Episode&Recursive=true&IsPlayed=true&Filters=IsPlayed&Limit=1000`);
+          recordItems((playedRes && playedRes.Items) || [], true);
+        } catch (_) {}
       }
 
-      // 2. Fallback if no series matched or 0 episodes returned
+      // 4. Fallback if Series wasn't found via ParentId
       if (Object.keys(epMap).length === 0) {
-        const epsRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Episode&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}&Limit=500&EnableUserData=true`);
+        const epsRes = await jfFetch(`${userScopedItemsPath}?${userQuery}IncludeItemTypes=Episode&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}&EnableUserData=true&Limit=1000`);
         const items = ((epsRes && epsRes.Items) || []).filter(it =>
           !it.SeriesName || it.SeriesName.toLowerCase().includes('south park')
         );
-        recordItems(items);
+        recordItems(items, false);
+      }
+
+      // 5. If still 0 watched found AND we authenticated via API Key (where multiple users might exist on the server),
+      // check if another user profile on the server has the watched South Park episodes!
+      const currentWatchedCount = Object.values(epMap).filter(x => x.played).length;
+      if (currentWatchedCount === 0 && jfConfig.authMode === 'apikey' && jfConfig.seriesId) {
+        try {
+          const allUsers = await jfFetch('/Users');
+          if (Array.isArray(allUsers) && allUsers.length > 1) {
+            for (const u of allUsers) {
+              if (!u || !u.Id || u.Id === jfConfig.userId) continue;
+              const uPlayed = await jfFetch(`/Users/${encodeURIComponent(u.Id)}/Items?UserId=${encodeURIComponent(u.Id)}&ParentId=${encodeURIComponent(jfConfig.seriesId)}&IncludeItemTypes=Episode&Recursive=true&IsPlayed=true&Filters=IsPlayed&Limit=1000`);
+              const pItems = (uPlayed && uPlayed.Items) || [];
+              if (pItems.length > 0) {
+                jfConfig.userId = u.Id;
+                if (u.Name) jfConfig.username = u.Name;
+                recordItems(pItems, true);
+                break;
+              }
+            }
+          }
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('Jellyfin episode sync warning:', err);
     }
 
+    const totalWatched = Object.values(epMap).filter(x => x.played).length;
     jfConfig.episodeMap = epMap;
-    jfConfig.lastSyncCount = watchedCount;
+    jfConfig.lastSyncCount = totalWatched;
     saveJson(STORAGE_KEY_JF, jfConfig);
     notifyWatchedListeners(epMap);
     return epMap;
   }
 
   // Push local Watched toggle (true/false) to Jellyfin Server
-  // Supports both Jellyfin 10.9-12.x `/UserPlayedItems/{itemId}?userId=...` and `/Users/{userId}/PlayedItems/{itemId}`
   async function setEpisodeWatchedOnJellyfin(ep, isWatched) {
     if (!jfConfig.connected || !jfConfig.serverUrl || !jfConfig.accessToken || !jfConfig.userId) {
       return false;
@@ -396,10 +456,8 @@
       const method = isWatched ? 'POST' : 'DELETE';
 
       try {
-        // Modern Jellyfin 10.9 - 12.x endpoint
         await jfFetch(`/UserPlayedItems/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(jfConfig.userId)}`, { method });
       } catch (_) {
-        // Classic endpoint fallback
         await jfFetch(`/Users/${encodeURIComponent(jfConfig.userId)}/PlayedItems/${encodeURIComponent(itemId)}`, { method });
       }
 
@@ -413,19 +471,101 @@
     }
   }
 
+  // Strictly filter /Sessions so ONLY online, video-capable players (TVs, Media Players) are shown —
+  // excluding Home Assistant, bots, scrapers, and powered-off TVs!
+  function isRealActiveVideoPlayerSession(s, myDevId) {
+    if (!s || s.DeviceId === myDevId) return false;
+
+    // 1. Exclude non-player integrations / bots (Home Assistant, Jellyseerr, Sonarr, Radarr, etc.)
+    const clientStr = `${s.Client || ''} ${s.DeviceName || ''} ${s.ApplicationVersion || ''}`.toLowerCase();
+    const blockedKeywords = [
+      'home assistant',
+      'home-assistant',
+      'homeassistant',
+      'hass',
+      'jellyseerr',
+      'overseerr',
+      'sonarr',
+      'radarr',
+      'prowlarr',
+      'bazarr',
+      'tautulli',
+      'jellystat',
+      'webhook',
+      'python',
+      'curl',
+      'episode finder'
+    ];
+    if (blockedKeywords.some(kw => clientStr.includes(kw))) {
+      return false;
+    }
+
+    // 2. Must be currently active on the server
+    if (s.IsActive === false) return false;
+
+    // 3. Must support media/remote control AND Video playback (or PlayMediaSource command)
+    if (s.SupportsMediaControl === false && s.SupportsRemoteControl === false) {
+      return false;
+    }
+
+    const playable = Array.isArray(s.PlayableMediaTypes) ? s.PlayableMediaTypes.map(x => String(x).toLowerCase()) : [];
+    const commands = Array.isArray(s.SupportedCommands) ? s.SupportedCommands.map(x => String(x).toLowerCase()) : [];
+    const canPlayVideo = playable.includes('video') || commands.includes('playmediasource') || commands.includes('play');
+    if (!canPlayVideo) {
+      return false;
+    }
+
+    // 4. Filter out stale / powered-off TVs:
+    // Jellyfin keeps closed TV sessions in /Sessions for hours unless we check LastActivityDate or NowPlayingItem.
+    // Active clients send heartbeats or WebSocket pings every few seconds/minutes.
+    if (s.NowPlayingItem) {
+      return true; // Currently playing media right now -> definitely on!
+    }
+    if (s.LastActivityDate) {
+      const lastMs = new Date(s.LastActivityDate).getTime();
+      if (!isNaN(lastMs)) {
+        const ageMinutes = (Date.now() - lastMs) / 60000;
+        // If a device hasn't communicated with Jellyfin in over 10 minutes and isn't playing anything, the TV/app is off
+        if (ageMinutes > 10) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   async function refreshSessions() {
     if (!jfConfig.serverUrl || !jfConfig.accessToken) {
       activeSessions = [];
       return [];
     }
-    const list = await jfFetch('/Sessions');
+    // Query /Sessions with ControllableByUserId if available so Jellyfin pre-filters controllable sessions
+    const query = jfConfig.userId ? `?ControllableByUserId=${encodeURIComponent(jfConfig.userId)}` : '';
+    let list = [];
+    try {
+      list = await jfFetch(`/Sessions${query}`);
+    } catch (_) {
+      list = await jfFetch('/Sessions');
+    }
+
     if (!Array.isArray(list)) {
       activeSessions = [];
       return [];
     }
+
     const myDevId = getDeviceId();
-    const remoteCapable = list.filter(s => s.DeviceId !== myDevId && s.SupportsRemoteControl !== false);
-    activeSessions = remoteCapable.length > 0 ? remoteCapable : list.filter(s => s.DeviceId !== myDevId);
+    activeSessions = list.filter(s => isRealActiveVideoPlayerSession(s, myDevId));
+
+    // Sort: currently playing devices first, then TVs / Android TV / WebOS / Tizen / Kodi, then most recent activity
+    activeSessions.sort((a, b) => {
+      if (Boolean(a.NowPlayingItem) !== Boolean(b.NowPlayingItem)) {
+        return a.NowPlayingItem ? -1 : 1;
+      }
+      const tA = a.LastActivityDate ? new Date(a.LastActivityDate).getTime() : 0;
+      const tB = b.LastActivityDate ? new Date(b.LastActivityDate).getTime() : 0;
+      return tB - tA;
+    });
 
     if (activeSessions.length > 0) {
       const stillExists = activeSessions.find(s => s.Id === jfConfig.selectedSessionId);
@@ -434,6 +574,10 @@
         jfConfig.selectedDeviceName = `${activeSessions[0].DeviceName || activeSessions[0].Client || 'TV'} (${activeSessions[0].Client || 'Jellyfin'})`;
         saveJson(STORAGE_KEY_JF, jfConfig);
       }
+    } else {
+      jfConfig.selectedSessionId = '';
+      jfConfig.selectedDeviceName = '';
+      saveJson(STORAGE_KEY_JF, jfConfig);
     }
     return activeSessions;
   }
@@ -443,7 +587,7 @@
     if (jfConfig.episodeMap && jfConfig.episodeMap[key] && jfConfig.episodeMap[key].id) {
       return jfConfig.episodeMap[key].id;
     }
-    const userParam = jfConfig.userId ? `userId=${encodeURIComponent(jfConfig.userId)}&` : '';
+    const userParam = jfConfig.userId ? `UserId=${encodeURIComponent(jfConfig.userId)}&` : '';
     const searchRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Episode&Recursive=true&SearchTerm=${encodeURIComponent(ep.title)}&Limit=20&EnableUserData=true`);
     const items = (searchRes && searchRes.Items) || [];
     const exact = items.find(it =>
@@ -473,8 +617,8 @@
     const targetSessionId = sessionIdOverride || jfConfig.selectedSessionId;
     if (!targetSessionId) {
       throw new Error(isDe
-        ? 'Kein Ziel-TV ausgewählt. Bitte öffne die Jellyfin-App auf deinem TV und klicke auf „TVs suchen“.'
-        : 'No target TV selected. Please open the Jellyfin app on your TV and click "Scan TVs".');
+        ? 'Kein eingeschalteter TV/Player gefunden. Bitte öffne die Jellyfin-App auf deinem TV und klicke auf „TVs suchen“.'
+        : 'No active TV/player found. Please open the Jellyfin app on your TV and click "Scan TVs".');
     }
 
     const itemId = await resolveEpisodeItemId(ep);

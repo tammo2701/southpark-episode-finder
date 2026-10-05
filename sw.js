@@ -1,4 +1,4 @@
-const CACHE_NAME = "folgen-finder-v7";
+const CACHE_NAME = "folgen-finder-v8";
 const ASSETS = [
   "./",
   "./index.html",
