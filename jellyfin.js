@@ -1,4 +1,5 @@
 // Settings, Jellyfin Cast & Two-Way Watched Sync for South Park Episode Finder
+// Compatible with Jellyfin 10.8, 10.9, 10.10, 10.11, 10.12 / 12.x+ (Modern Authorization: MediaBrowser scheme)
 (function () {
   const STORAGE_KEY_JF = 'sp_jellyfin_cfg';
   const STORAGE_KEY_PREFS = 'sp_user_prefs';
@@ -33,11 +34,12 @@
 
   const jfConfig = loadJson(STORAGE_KEY_JF, {
     serverUrl: '',
-    authMode: 'apikey', // 'apikey' | 'userpass'
+    authMode: 'userpass', // 'userpass' | 'apikey'
     username: '',
     accessToken: '',
     userId: '',
     serverName: '',
+    serverVersion: '',
     seriesId: '',
     selectedSessionId: '',
     selectedDeviceName: '',
@@ -78,48 +80,46 @@
     return u.replace(/\/+$/, '');
   }
 
-  function buildEmbyAuthHeader(token) {
+  // Modern Jellyfin 10.9 - 10.12 / 12.x+ Authorization Header:
+  // Uses standard `Authorization: MediaBrowser Client="...", Device="...", DeviceId="...", Version="...", Token="..."`
+  function buildMediaBrowserAuthHeader(token) {
     const devId = getDeviceId();
-    let hdr = `MediaBrowser Client="South Park Episode Finder", Device="Web App", DeviceId="${devId}", Version="1.0.0"`;
+    let hdr = `MediaBrowser Client="South Park Episode Finder", Device="Web Browser", DeviceId="${devId}", Version="1.2.0"`;
     if (token) {
       hdr += `, Token="${token}"`;
     }
     return hdr;
   }
 
-  function appendTokenToUrl(rawUrl, token) {
+  function appendApiKeyToUrl(rawUrl, token) {
     if (!token) return rawUrl;
     const sep = rawUrl.includes('?') ? '&' : '?';
-    return `${rawUrl}${sep}api_key=${encodeURIComponent(token)}`;
+    return `${rawUrl}${sep}ApiKey=${encodeURIComponent(token)}`;
   }
 
-  // Probe whether the browser blocks HTTP requests from HTTPS due to "Insecure Content" (Mixed Content)
-  // vs "Local Network Access" vs Server unreachable
   async function diagnoseConnectionProblem(baseUrl) {
     const isDe = document.documentElement.lang === 'de';
     const pageIsHttps = window.location.protocol === 'https:';
     const targetIsHttp = baseUrl.toLowerCase().startsWith('http://');
 
     if (pageIsHttps && targetIsHttp) {
-      // Try no-cors probe to see if the browser blocks the request before it even leaves (Mixed Content)
       try {
         await fetch(`${baseUrl}/System/Info/Public`, { mode: 'no-cors', cache: 'no-store' });
-        // If no-cors succeeds, Mixed Content & Local Network ARE allowed, so it was a CORS header or endpoint issue!
       } catch (_) {
-        // Browser blocked even a no-cors request -> "Insecure content" (Unsichere Inhalte) is still blocked in Chrome/Edge/Brave!
         throw new Error(isDe
-          ? `WICHTIG: „Lokales Netzwerk“ allein reicht bei HTTPS (${window.location.hostname}) nicht aus – der Browser blockiert noch „Unsichere Inhalte“ (HTTP). Lösung in 3 Klicks: 1. Klicke links in der Adresszeile auf das Einstellungs-Symbol \u2192 „Website-Einstellungen“. 2. Scrolle zu „Unsichere Inhalte“ (Insecure content) und stelle es von „Blockieren“ auf „Zulassen“. 3. Lade die Seite neu.`
-          : `IMPORTANT: Allowing "Local Network" alone is not enough on HTTPS (${window.location.hostname}) — the browser is still blocking "Insecure content" (HTTP). Fix in 3 clicks: 1. Click the tune/lock icon in the address bar \u2192 "Site settings". 2. Scroll to "Insecure content" and change it from "Block" to "Allow". 3. Reload this page.`);
+          ? `Der Browser blockiert „Unsichere Inhalte“ (HTTP) auf dieser HTTPS-Seite. Klicke links in der Adresszeile auf das Einstellungs-Symbol \u2192 „Website-Einstellungen“ \u2192 stelle „Unsichere Inhalte“ (Insecure content) auf „Zulassen“ und lade die Seite neu.`
+          : `The browser is blocking "Insecure content" (HTTP) on this HTTPS page. Click the tune/lock icon in the address bar \u2192 "Site settings" \u2192 set "Insecure content" to "Allow" and reload.`);
       }
     }
 
     throw new Error(isDe
-      ? `Jellyfin-Server unter „${baseUrl}“ nicht erreichbar. Bitte prüfe IP & Port (z.B. :8096) und ob du im selben WLAN bist.`
-      : `Could not reach Jellyfin server at "${baseUrl}". Please check IP & port (e.g. :8096) and ensure you are on the same network.`);
+      ? `Jellyfin-Server unter „${baseUrl}“ nicht erreichbar. Bitte prüfe IP & Port (z.B. :8096) und ob du im selben Netzwerk bist.`
+      : `Could not reach Jellyfin server at "${baseUrl}". Please check IP & port (e.g. :8096) and your network connection.`);
   }
 
-  // Smart Jellyfin Fetch:
-  // Avoids CORS preflight (OPTIONS) whenever possible because Jellyfin returns 405 Method Not Allowed on OPTIONS from external origins unless specially configured.
+  // Core Jellyfin API caller supporting Jellyfin 10.8 -> 12.x+
+  // 1. Primary: Modern standard `Authorization: MediaBrowser ...` header (required when EnableLegacyAuthorization is false in Jellyfin 10.12 / 12.x).
+  // 2. Fallback: Legacy `X-Emby-Authorization` + `ApiKey` query parameter for older setups or strict proxies.
   async function jfFetch(path, options = {}) {
     const base = cleanServerUrl(jfConfig.serverUrl);
     if (!base) throw new Error('Server URL missing');
@@ -127,105 +127,122 @@
     const method = (options.method || 'GET').toUpperCase();
     const token = options.token !== undefined ? options.token : jfConfig.accessToken;
     const rawUrl = `${base}${cleanPath}`;
-    const urlWithToken = appendTokenToUrl(rawUrl, token);
     const isDe = document.documentElement.lang === 'de';
 
-    // Attempt 1: Pure CORS-Simple Request (ZERO custom headers, no application/json Content-Type on empty body)
-    // This completely skips the browser's OPTIONS preflight request!
-    if (!cleanPath.includes('/Users/AuthenticateByName') && method !== 'DELETE') {
-      try {
-        const simpleOpts = { method };
-        if (options.body) {
-          // Use text/plain if possible or application/json
-          simpleOpts.headers = { 'Content-Type': 'application/json' };
-          simpleOpts.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-        }
-        const res = await fetch(urlWithToken, simpleOpts);
-        if (res.ok) {
-          const text = await res.text();
-          return text ? JSON.parse(text) : {};
-        }
-        if (res.status === 401 || res.status === 403) {
-          throw new Error(isDe
-            ? `Zugriff verweigert (HTTP ${res.status}): Bitte API-Key oder Zugangsdaten prüfen.`
-            : `Access denied (HTTP ${res.status}): Please check your API key or credentials.`);
-        }
-      } catch (err1) {
-        if (err1 && err1.message && (err1.message.includes('401') || err1.message.includes('403'))) {
-          throw err1;
-        }
-      }
-    }
+    const authValue = buildMediaBrowserAuthHeader(token);
 
-    // Attempt 2: Full X-Emby-Authorization header request
-    const fullHeaders = {
+    // Attempt 1: Modern Jellyfin 10.11 / 10.12 / 12.x standard `Authorization` header
+    const modernHeaders = {
       'Accept': 'application/json',
-      'X-Emby-Authorization': buildEmbyAuthHeader(token),
+      'Authorization': authValue,
       ...(options.headers || {})
     };
-    if (token) {
-      fullHeaders['X-Emby-Token'] = token;
+    if (options.body !== undefined) {
+      modernHeaders['Content-Type'] = 'application/json';
     }
-    if (options.body && !fullHeaders['Content-Type']) {
-      fullHeaders['Content-Type'] = 'application/json';
-    }
+
+    let lastHttpStatus = 0;
+    let lastHttpErrorText = '';
 
     try {
-      const res2 = await fetch(rawUrl, {
+      const res1 = await fetch(rawUrl, {
         method,
-        headers: fullHeaders,
-        body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+        headers: modernHeaders,
+        body: options.body !== undefined ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
       });
-      if (!res2.ok) {
-        if (res2.status === 401 || res2.status === 403) {
-          throw new Error(isDe
-            ? `Anmeldung fehlgeschlagen (HTTP ${res2.status}): Ungültiger Benutzername, Passwort oder API-Key.`
-            : `Authentication failed (HTTP ${res2.status}): Invalid username, password, or API key.`);
-        }
-        const errText = await res2.text().catch(() => '');
-        throw new Error(`HTTP ${res2.status}: ${errText || res2.statusText}`);
-      }
-      const text2 = await res2.text();
-      return text2 ? JSON.parse(text2) : {};
-    } catch (directErr) {
-      if (directErr && directErr.message && directErr.message.startsWith('HTTP ')) {
-        throw directErr;
-      }
-      if (directErr && directErr.message && (directErr.message.includes('401') || directErr.message.includes('403'))) {
-        throw directErr;
+
+      if (res1.ok) {
+        const text = await res1.text();
+        return text ? JSON.parse(text) : {};
       }
 
-      // If /Users/AuthenticateByName failed due to CORS preflight (because Jellyfin blocks custom X-Emby-Authorization on OPTIONS from https://southfinder.pages.dev)
-      if (cleanPath.includes('/Users/AuthenticateByName')) {
-        // First check if Mixed Content ("Unsichere Inhalte") is the blocker
-        await diagnoseConnectionProblem(base);
-        // If Mixed Content is NOT blocked (no-cors succeeded), then Jellyfin rejected the OPTIONS preflight for /Users/AuthenticateByName!
+      lastHttpStatus = res1.status;
+      lastHttpErrorText = await res1.text().catch(() => '');
+
+      if (res1.status === 401 || res1.status === 403) {
         throw new Error(isDe
-          ? 'Dein Jellyfin-Server ist erreichbar, blockiert aber die Passwort-Anmeldung von externen Domains (CORS-Preflight). Bitte wechsle oben auf „API-Key / Token“ (in Jellyfin unter Dashboard \u2192 API-Schlüssel erstellen) – damit funktioniert die Verbindung sofort ohne CORS-Blockade!'
-          : 'Your Jellyfin server is reachable, but blocks password login from external domains (CORS preflight). Please switch to "API Key / Token" above (create one in Jellyfin under Dashboard \u2192 API Keys) — it works immediately without CORS preflight!');
+          ? `Anmeldung abgelehnt (HTTP ${res1.status}): Bitte Benutzername, Passwort oder API-Key prüfen.`
+          : `Authentication rejected (HTTP ${res1.status}): Please check your username, password, or API key.`);
       }
-
-      await diagnoseConnectionProblem(base);
-      throw directErr;
+    } catch (err1) {
+      if (err1 && err1.message && (err1.message.includes('401') || err1.message.includes('403'))) {
+        throw err1;
+      }
     }
+
+    // Attempt 2: Query parameter `?ApiKey=...` without custom headers (for API key mode or endpoints that don't require session DeviceId)
+    if (token && !cleanPath.includes('/Users/AuthenticateByName')) {
+      try {
+        const urlWithKey = appendApiKeyToUrl(rawUrl, token);
+        const simpleHeaders = { 'Accept': 'application/json' };
+        if (options.body !== undefined) {
+          simpleHeaders['Content-Type'] = 'application/json';
+        }
+        const res2 = await fetch(urlWithKey, {
+          method,
+          headers: simpleHeaders,
+          body: options.body !== undefined ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+        });
+        if (res2.ok) {
+          const text2 = await res2.text();
+          return text2 ? JSON.parse(text2) : {};
+        }
+      } catch (_) {}
+    }
+
+    // Attempt 3: Both `Authorization` and `X-Emby-Authorization` (for older Jellyfin 10.8 / Emby compatibility)
+    try {
+      const dualHeaders = {
+        'Accept': 'application/json',
+        'Authorization': authValue,
+        'X-Emby-Authorization': authValue,
+        ...(options.headers || {})
+      };
+      if (options.body !== undefined) {
+        dualHeaders['Content-Type'] = 'application/json';
+      }
+      const res3 = await fetch(rawUrl, {
+        method,
+        headers: dualHeaders,
+        body: options.body !== undefined ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+      });
+      if (res3.ok) {
+        const text3 = await res3.text();
+        return text3 ? JSON.parse(text3) : {};
+      }
+      lastHttpStatus = res3.status;
+      lastHttpErrorText = await res3.text().catch(() => '');
+    } catch (networkErr) {
+      if (!lastHttpStatus) {
+        await diagnoseConnectionProblem(base);
+        throw networkErr;
+      }
+    }
+
+    throw new Error(`HTTP ${lastHttpStatus}: ${lastHttpErrorText || 'Error processing request'} (${cleanPath})`);
   }
 
   // Authenticate by Username & Password OR API Key
   async function connectAndSyncJellyfin(params) {
+    const isDe = document.documentElement.lang === 'de';
     jfConfig.serverUrl = cleanServerUrl(params.serverUrl);
     jfConfig.authMode = params.authMode;
     jfConfig.username = (params.username || '').trim();
 
     if (!jfConfig.serverUrl) {
-      throw new Error(document.documentElement.lang === 'de' ? 'Bitte gib deine Jellyfin Server-URL ein.' : 'Please enter your Jellyfin Server URL.');
+      throw new Error(isDe ? 'Bitte gib deine Jellyfin Server-URL ein.' : 'Please enter your Jellyfin Server URL.');
     }
 
-    // 1. Public server info check (Simple GET - no preflight!)
+    // 1. Public server info check
     const pubInfo = await jfFetch('/System/Info/Public', { token: '' });
     jfConfig.serverName = pubInfo.ServerName || 'Jellyfin Server';
+    jfConfig.serverVersion = pubInfo.Version || '';
 
     // 2. Authenticate
     if (params.authMode === 'userpass') {
+      if (!jfConfig.username) {
+        throw new Error(isDe ? 'Bitte gib deinen Jellyfin-Benutzernamen ein.' : 'Please enter your Jellyfin username.');
+      }
       const authData = await jfFetch('/Users/AuthenticateByName', {
         method: 'POST',
         token: '',
@@ -235,24 +252,41 @@
         }
       });
       if (!authData || !authData.AccessToken) {
-        throw new Error(document.documentElement.lang === 'de' ? 'Anmeldung fehlgeschlagen: Kein AccessToken erhalten.' : 'Authentication failed: No AccessToken received.');
+        throw new Error(isDe ? 'Anmeldung fehlgeschlagen: Kein AccessToken erhalten.' : 'Authentication failed: No AccessToken received.');
       }
       jfConfig.accessToken = authData.AccessToken;
       jfConfig.userId = authData.User ? authData.User.Id : '';
     } else {
       const apiKey = (params.apiKey || '').trim();
       if (!apiKey) {
-        throw new Error(document.documentElement.lang === 'de' ? 'Bitte API-Key / Token eingeben.' : 'Please enter an API Key / Token.');
+        throw new Error(isDe ? 'Bitte API-Key / Token eingeben.' : 'Please enter an API Key / Token.');
       }
       jfConfig.accessToken = apiKey;
-      const users = await jfFetch('/Users', { token: apiKey });
-      if (Array.isArray(users) && users.length > 0) {
-        const matchUser = jfConfig.username
-          ? users.find(u => (u.Name || '').toLowerCase() === jfConfig.username.toLowerCase()) || users[0]
-          : users[0];
-        jfConfig.userId = matchUser.Id;
-        jfConfig.username = matchUser.Name || jfConfig.username;
+
+      // Resolve User ID:
+      // First try /Users/Me (works if the token is a user session token), then fallback to /Users (works for Admin API Keys)
+      let resolvedUserId = '';
+      try {
+        const me = await jfFetch('/Users/Me', { token: apiKey });
+        if (me && me.Id) {
+          resolvedUserId = me.Id;
+          jfConfig.username = me.Name || jfConfig.username;
+        }
+      } catch (_) {}
+
+      if (!resolvedUserId) {
+        try {
+          const users = await jfFetch('/Users', { token: apiKey });
+          if (Array.isArray(users) && users.length > 0) {
+            const matchUser = jfConfig.username
+              ? users.find(u => (u.Name || '').toLowerCase() === jfConfig.username.toLowerCase()) || users[0]
+              : users[0];
+            resolvedUserId = matchUser.Id;
+            jfConfig.username = matchUser.Name || jfConfig.username;
+          }
+        } catch (_) {}
       }
+      jfConfig.userId = resolvedUserId;
     }
 
     // 3. Scan South Park Series, Episodes & Played/Watched status in Jellyfin library
@@ -267,6 +301,7 @@
   }
 
   // Fetches all South Park episodes from Jellyfin along with UserData.Played & UserData.IsFavorite
+  // Uses modern Jellyfin 10.9 - 12.x `/Items` and `/Shows/{seriesId}/Episodes` parameters
   async function syncSouthParkEpisodes() {
     const epMap = {};
     let watchedCount = 0;
@@ -284,17 +319,19 @@
       } catch (_) {}
     }
 
-    const userPath = jfConfig.userId ? `/Users/${jfConfig.userId}/Items` : '/Items';
-    const userQuery = jfConfig.userId ? `&UserId=${encodeURIComponent(jfConfig.userId)}` : '';
+    const userParam = jfConfig.userId ? `userId=${encodeURIComponent(jfConfig.userId)}&` : '';
 
     const recordItems = (items) => {
+      if (!Array.isArray(items)) return;
       for (const item of items) {
         const s = item.ParentIndexNumber !== undefined ? item.ParentIndexNumber : -1;
         const e = item.IndexNumber !== undefined ? item.IndexNumber : -1;
         if (s >= 0 && e >= 0) {
           const played = Boolean(item.UserData && item.UserData.Played);
           const fav = Boolean(item.UserData && item.UserData.IsFavorite);
-          if (played) watchedCount++;
+          if (played && (!epMap[`S${s}E${e}`] || !epMap[`S${s}E${e}`].played)) {
+            watchedCount++;
+          }
           epMap[`S${s}E${e}`] = {
             id: item.Id,
             name: item.Name || '',
@@ -306,24 +343,35 @@
     };
 
     try {
-      const seriesRes = await jfFetch(`${userPath}?IncludeItemTypes=Series&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}`);
+      // 1. Find South Park Series item via top-level /Items endpoint (compatible with Jellyfin 10.8 -> 12.x+)
+      const seriesRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Series&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}`);
       const seriesList = (seriesRes && seriesRes.Items) || [];
       const spSeries = seriesList.find(s => (s.Name || '').toLowerCase().includes('south park')) || seriesList[0];
 
       if (spSeries && spSeries.Id) {
         jfConfig.seriesId = spSeries.Id;
-        const epsRes = await jfFetch(`/Shows/${spSeries.Id}/Episodes?Fields=UserData${userQuery}`);
-        recordItems((epsRes && epsRes.Items) || []);
+        // Fetch episodes for this series (UserData is included automatically when userId is passed)
+        try {
+          const epsRes = await jfFetch(`/Shows/${encodeURIComponent(spSeries.Id)}/Episodes?${userParam}EnableUserData=true`);
+          recordItems((epsRes && epsRes.Items) || []);
+        } catch (_) {
+          // Fallback to /Items with ParentId if /Shows/{id}/Episodes throws 400 on custom setups
+          const epsFallback = await jfFetch(`/Items?${userParam}ParentId=${encodeURIComponent(spSeries.Id)}&IncludeItemTypes=Episode&Recursive=true&EnableUserData=true`);
+          recordItems((epsFallback && epsFallback.Items) || []);
+        }
       }
 
+      // 2. Fallback if no series matched or 0 episodes returned
       if (Object.keys(epMap).length === 0) {
-        const epsRes = await jfFetch(`${userPath}?IncludeItemTypes=Episode&Recursive=true&Fields=UserData&SearchTerm=${encodeURIComponent('South Park')}&Limit=500`);
+        const epsRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Episode&Recursive=true&SearchTerm=${encodeURIComponent('South Park')}&Limit=500&EnableUserData=true`);
         const items = ((epsRes && epsRes.Items) || []).filter(it =>
           !it.SeriesName || it.SeriesName.toLowerCase().includes('south park')
         );
         recordItems(items);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn('Jellyfin episode sync warning:', err);
+    }
 
     jfConfig.episodeMap = epMap;
     jfConfig.lastSyncCount = watchedCount;
@@ -332,7 +380,8 @@
     return epMap;
   }
 
-  // Push local Watched toggle (true/false) to Jellyfin Server for a specific episode
+  // Push local Watched toggle (true/false) to Jellyfin Server
+  // Supports both Jellyfin 10.9-12.x `/UserPlayedItems/{itemId}?userId=...` and `/Users/{userId}/PlayedItems/{itemId}`
   async function setEpisodeWatchedOnJellyfin(ep, isWatched) {
     if (!jfConfig.connected || !jfConfig.serverUrl || !jfConfig.accessToken || !jfConfig.userId) {
       return false;
@@ -344,9 +393,16 @@
       const itemId = await resolveEpisodeItemId(ep);
       if (!itemId) return false;
       const key = `S${ep.s}E${ep.e}`;
-      await jfFetch(`/Users/${encodeURIComponent(jfConfig.userId)}/PlayedItems/${encodeURIComponent(itemId)}`, {
-        method: isWatched ? 'POST' : 'DELETE'
-      });
+      const method = isWatched ? 'POST' : 'DELETE';
+
+      try {
+        // Modern Jellyfin 10.9 - 12.x endpoint
+        await jfFetch(`/UserPlayedItems/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(jfConfig.userId)}`, { method });
+      } catch (_) {
+        // Classic endpoint fallback
+        await jfFetch(`/Users/${encodeURIComponent(jfConfig.userId)}/PlayedItems/${encodeURIComponent(itemId)}`, { method });
+      }
+
       if (jfConfig.episodeMap && jfConfig.episodeMap[key]) {
         jfConfig.episodeMap[key].played = Boolean(isWatched);
         saveJson(STORAGE_KEY_JF, jfConfig);
@@ -387,8 +443,8 @@
     if (jfConfig.episodeMap && jfConfig.episodeMap[key] && jfConfig.episodeMap[key].id) {
       return jfConfig.episodeMap[key].id;
     }
-    const userPath = jfConfig.userId ? `/Users/${jfConfig.userId}/Items` : '/Items';
-    const searchRes = await jfFetch(`${userPath}?IncludeItemTypes=Episode&Recursive=true&Fields=UserData&SearchTerm=${encodeURIComponent(ep.title)}&Limit=20`);
+    const userParam = jfConfig.userId ? `userId=${encodeURIComponent(jfConfig.userId)}&` : '';
+    const searchRes = await jfFetch(`/Items?${userParam}IncludeItemTypes=Episode&Recursive=true&SearchTerm=${encodeURIComponent(ep.title)}&Limit=20&EnableUserData=true`);
     const items = (searchRes && searchRes.Items) || [];
     const exact = items.find(it =>
       (it.ParentIndexNumber === ep.s && it.IndexNumber === ep.e) ||
