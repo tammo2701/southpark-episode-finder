@@ -723,6 +723,136 @@
     border-top: 2px dashed #d5e0ea;
   }
 
+  /* ---------- Jellyfin Cast & Settings UI ---------- */
+  .jf-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #94a3b8;
+    border: 1.5px solid var(--line);
+    display: inline-block;
+  }
+  .jf-dot.online {
+    background: #22c55e;
+  }
+  .cast-panel {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #eef6ff;
+    border: 2.5px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 3px 3px 0 var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .cast-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .cast-title {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 800;
+    font-size: .95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cast-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .cast-btn-main {
+    flex: 1;
+    min-height: 44px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    border: 2.5px solid var(--line);
+    background: var(--stan-blue);
+    color: #fff;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 800;
+    font-size: .95rem;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--line);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .cast-btn-main:hover { filter: brightness(1.06); }
+  .cast-btn-main:disabled { opacity: .6; cursor: not-allowed; }
+  .cast-status {
+    font-size: .8rem;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 9px;
+    background: var(--paper);
+    border: 1.5px solid var(--line);
+    display: none;
+  }
+  .cast-status.show { display: block; }
+  .cast-status.ok { background: #dcfce7; color: #14532d; }
+  .cast-status.err { background: #fee2e2; color: #7f1d1d; }
+
+  .settings-group {
+    border: 2.5px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    background: var(--snow);
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .settings-group h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-row label {
+    font-size: .78rem;
+    font-weight: 800;
+    color: var(--ink-muted);
+  }
+  .sp-input {
+    min-height: 42px;
+    border: 2.5px solid var(--line);
+    border-radius: 11px;
+    background: var(--paper);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: .95rem;
+    padding: 8px 12px;
+    width: 100%;
+  }
+  .mini-act.cast-card-btn {
+    background: #dbeafe;
+    color: #1e3a8a;
+    font-weight: 800;
+  }
+  .avail-tag {
+    font-size: .68rem;
+    font-weight: 800;
+    color: #166534;
+    background: #dcfce7;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+
   /* ---------- Floating Scroll Top & Offline Banner ---------- */
   #toTopBtn {
     position: fixed;
@@ -792,6 +922,11 @@
       <button type="button" class="top-btn install-btn" id="pwaInstallBtn" hidden>
         <span aria-hidden="true">&#11015;</span>
         <span id="pwaInstallLabel">App installieren</span>
+      </button>
+      <button type="button" class="top-btn" id="settingsBtn">
+        <span class="jf-dot" id="jfTopDot"></span>
+        <span aria-hidden="true">&#9881;</span>
+        <span id="settingsBtnLabel">Einstellungen</span>
       </button>
     </div>
   </div>
@@ -919,10 +1054,150 @@
     <div class="modal-sec-title" id="modalTagsLabel">Themen &amp; Running Gags (antippen zum Filtern)</div>
     <div class="modal-btn-list" id="modalTags"></div>
 
+    <!-- Jellyfin TV Cast Panel inside Episode Modal -->
+    <div class="cast-panel" id="modalCastPanel">
+      <div class="cast-panel-head">
+        <span class="cast-title">
+          <span class="jf-dot" id="modalJfDot"></span>
+          <span id="modalCastHeading">Jellyfin TV-Cast</span>
+        </span>
+        <span id="modalJfLibBadge" class="avail-tag" style="display:none;"></span>
+      </div>
+
+      <!-- Shown when Jellyfin is NOT connected -->
+      <div id="modalCastNotConnected">
+        <button type="button" class="top-btn" id="modalOpenJfSettingsBtn" style="width:100%;justify-content:center;">
+          &#9881; <span id="modalOpenJfSettingsText">Mit Jellyfin verbinden, um auf TV abzuspielen</span>
+        </button>
+      </div>
+
+      <!-- Shown when Jellyfin IS connected -->
+      <div id="modalCastConnected" style="display:none;flex-direction:column;gap:8px;">
+        <div class="cast-row">
+          <select id="modalTvSelect" class="sp-select" style="flex:1;min-width:160px;"></select>
+          <button type="button" class="top-btn" id="modalRefreshTvsBtn" title="Refresh TVs">&#8635;</button>
+        </div>
+        <div class="cast-row">
+          <button type="button" class="cast-btn-main" id="modalCastPlayBtn">
+            <span>&#128250;</span>
+            <span id="modalCastPlayText">Auf TV abspielen</span>
+          </button>
+          <button type="button" class="top-btn" id="modalRemotePauseBtn" title="Play / Pause">&#9199;</button>
+          <button type="button" class="top-btn" id="modalRemoteStopBtn" title="Stop">&#9209;</button>
+          <a class="top-btn" id="modalOpenWebLink" href="#" target="_blank" rel="noopener" style="text-decoration:none;display:none;">&#127760; Web</a>
+        </div>
+        <div class="cast-status" id="modalCastStatus"></div>
+      </div>
+    </div>
+
     <div class="modal-footer-btns">
       <button type="button" class="top-btn" id="modalFavBtn"></button>
       <button type="button" class="top-btn" id="modalWatchBtn"></button>
       <button type="button" class="top-btn" id="modalCopyBtn"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal (Language, Display & Jellyfin Local TV Cast) -->
+<div class="modal-backdrop" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="modal-head" style="margin-bottom:12px;">
+      <h2 id="settingsModalTitle" style="margin:0;font-size:1.4rem;">&#9881; Einstellungen</h2>
+      <button type="button" class="modal-close" id="settingsCloseBtn" aria-label="Close">&times;</button>
+    </div>
+
+    <!-- Section 1: Language & Display -->
+    <div class="settings-group">
+      <h3 id="secLangTitle">Sprache &amp; Darstellung</h3>
+      <div class="field-row">
+        <label for="prefLangSelect" id="prefLangLabel">App-Sprache</label>
+        <select id="prefLangSelect" class="sp-select">
+          <option value="auto" id="optLangAuto">Automatisch (Browser-Sprache)</option>
+          <option value="de">Deutsch (DE)</option>
+          <option value="en">English (EN)</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="prefRoleSelect" id="prefRoleLabel">Standard-Figurenfilter</label>
+        <select id="prefRoleSelect" class="sp-select">
+          <option value="main" id="optRoleMain">Nur Hauptfigur (Main Character)</option>
+          <option value="all" id="optRoleAll">Alle Auftritte (All Appearances)</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="prefDualLangSelect" id="prefDualLangLabel">Zweite Sprache in Folgendetails</label>
+        <select id="prefDualLangSelect" class="sp-select">
+          <option value="1" id="optDualOn">Anzeigen (DE + EN Beschreibung)</option>
+          <option value="0" id="optDualOff">Ausblenden</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Section 2: Jellyfin Local Connection & TV Cast -->
+    <div class="settings-group">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <h3 id="secJfTitle">&#128250; Jellyfin &amp; TV-Cast</h3>
+        <span id="jfConnBadge" class="avail-tag" style="background:#e2e8f0;color:#334155;">Nicht verbunden</span>
+      </div>
+      <p id="secJfDesc" style="margin:0;font-size:.82rem;color:var(--ink-muted);line-height:1.4;">
+        Verbinde deinen lokalen Jellyfin-Server, um ausgewählte South-Park-Folgen direkt per Cast-Button auf deinem mit Jellyfin verbundenen TV abzuspielen.
+      </p>
+
+      <div class="field-row">
+        <label for="jfUrlInput" id="jfUrlLabel">Jellyfin Server-URL</label>
+        <input type="url" id="jfUrlInput" class="sp-input" placeholder="http://192.168.178.50:8096" autocomplete="off">
+      </div>
+
+      <div class="field-row">
+        <label id="jfAuthModeLabel">Anmelde-Methode</label>
+        <div class="role-toggle" style="align-self:flex-start;">
+          <button type="button" id="jfModeUserBtn" class="active">Benutzer &amp; Passwort</button>
+          <button type="button" id="jfModeKeyBtn">API-Key / Token</button>
+        </div>
+      </div>
+
+      <div id="jfUserPassFields" style="display:flex;flex-direction:column;gap:8px;">
+        <div class="field-row">
+          <label for="jfUserInput" id="jfUserLabel">Benutzername</label>
+          <input type="text" id="jfUserInput" class="sp-input" placeholder="Benutzername" autocomplete="username">
+        </div>
+        <div class="field-row">
+          <label for="jfPassInput" id="jfPassLabel">Passwort</label>
+          <input type="password" id="jfPassInput" class="sp-input" placeholder="••••••••" autocomplete="current-password">
+        </div>
+      </div>
+
+      <div id="jfApiKeyFields" style="display:none;flex-direction:column;gap:8px;">
+        <div class="field-row">
+          <label for="jfKeyInput" id="jfKeyLabel">Jellyfin API-Key oder Access Token</label>
+          <input type="password" id="jfKeyInput" class="sp-input" placeholder="32-stelliger API-Key..." autocomplete="off">
+        </div>
+      </div>
+
+      <div class="cast-row">
+        <button type="button" class="cast-btn-main" id="jfConnectBtn">Verbinden &amp; Mediathek scannen</button>
+        <button type="button" class="top-btn" id="jfDisconnectBtn" style="display:none;">Trennen</button>
+      </div>
+
+      <div class="cast-status" id="jfSettingsStatus"></div>
+
+      <!-- Target TV selection inside Settings -->
+      <div id="jfTargetDeviceWrap" class="field-row" style="margin-top:4px;padding-top:10px;border-top:1.5px dashed #cbd5e1;">
+        <label for="jfSettingsTvSelect" id="jfTargetTvLabel">Ausgewählter TV / Jellyfin-Player</label>
+        <div class="cast-row">
+          <select id="jfSettingsTvSelect" class="sp-select" style="flex:1;"></select>
+          <button type="button" class="top-btn" id="jfRefreshSessionsBtn">&#8635; <span id="jfRefreshBtnText">TVs suchen</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Watchlist & Data Reset -->
+    <div class="settings-group" style="margin-bottom:0;">
+      <h3 id="secDataTitle">Merkliste &amp; Gesehen-Daten</h3>
+      <div class="cast-row">
+        <button type="button" class="top-btn" id="clearUserDataBtn">&#128465; <span id="clearUserDataText">Merkliste &amp; Gesehen-Status leeren</span></button>
+      </div>
     </div>
   </div>
 </div>
@@ -946,16 +1221,16 @@
 <footer id="footerText">Inoffizielles Fan-Projekt &middot; South Park &copy; Comedy Central / Trey Parker &amp; Matt Stone &middot; nur zur Orientierung, keine Streaming-Quelle</footer>
 
 <script src="episodes.js"></script>
+<script src="jellyfin.js"></script>
 <script>
 (function() {
   const DATA = window.EPISODES || [];
 
-  // ---- Language detection (Browser language + localStorage override) ----
-  function detectInitialLang() {
-    try {
-      const saved = localStorage.getItem('sp_lang');
-      if (saved === 'de' || saved === 'en') return saved;
-    } catch (_) {}
+  const JF = window.SP_JELLYFIN;
+
+  // ---- Language detection (Settings preference + Browser language) ----
+  function resolveLanguage(mode) {
+    if (mode === 'de' || mode === 'en') return mode;
     const navLangs = navigator.languages && navigator.languages.length
       ? navigator.languages
       : [navigator.language || 'de'];
@@ -966,6 +1241,16 @@
       if (code.startsWith('en')) return 'en';
     }
     return (navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en';
+  }
+
+  function detectInitialLang() {
+    try {
+      const prefMode = JF && JF.userPrefs && JF.userPrefs.langMode;
+      if (prefMode === 'de' || prefMode === 'en') return prefMode;
+      const saved = localStorage.getItem('sp_lang');
+      if (saved === 'de' || saved === 'en') return saved;
+    } catch (_) {}
+    return resolveLanguage('auto');
   }
 
   let lang = detectInitialLang();
@@ -1074,6 +1359,46 @@
       iosTitle: "Als App auf iPhone / iPad installieren",
       iosSteps: "1. Tippe unten im Safari-Browser auf das <b>Teilen-Symbol</b> (Quadrat mit Pfeil nach oben).<br>2. Scrolle nach unten und wähle <b>„Zum Home-Bildschirm“</b>.<br>3. Tippe oben rechts auf <b>Hinzufügen</b> – fertig!",
       iosOk: "Verstanden",
+      settingsBtn: "Einstellungen",
+      settingsTitle: "\u2699 Einstellungen",
+      secLangTitle: "Sprache & Darstellung",
+      prefLangLabel: "App-Sprache",
+      optLangAuto: "Automatisch (Browser-Sprache)",
+      prefRoleLabel: "Standard-Figurenfilter",
+      optRoleMain: "Nur Hauptfigur (Main Character)",
+      optRoleAll: "Alle Auftritte (All Appearances)",
+      prefDualLangLabel: "Zweite Sprache in Folgendetails",
+      optDualOn: "Anzeigen (DE + EN Beschreibung)",
+      optDualOff: "Ausblenden",
+      secJfTitle: "\ud83d\udcfa Jellyfin & TV-Cast",
+      secJfDesc: "Verbinde deinen lokalen Jellyfin-Server, um ausgewählte South-Park-Folgen direkt per Cast-Button auf einem mit Jellyfin verbundenen TV abzuspielen.",
+      jfNotConnected: "Nicht verbunden",
+      jfConnectedTo: (name, count) => `Verbunden: ${name} (${count} SP-Folgen)`,
+      jfUrlLabel: "Jellyfin Server-URL (lokale IP oder Domain)",
+      jfAuthModeLabel: "Anmelde-Methode",
+      jfModeUser: "Benutzer & Passwort",
+      jfModeKey: "API-Key / Token",
+      jfUserLabel: "Benutzername",
+      jfPassLabel: "Passwort",
+      jfKeyLabel: "Jellyfin API-Key oder Access Token",
+      jfConnectBtn: "Verbinden & Mediathek scannen",
+      jfConnecting: "Verbinde...",
+      jfDisconnectBtn: "Trennen",
+      jfTargetTvLabel: "Ausgewählter TV / Jellyfin-Player",
+      jfRefreshBtn: "TVs suchen",
+      jfNoTvFound: "Kein aktiver TV/Player gefunden (bitte Jellyfin am TV öffnen)",
+      jfConnectSuccess: (srv, eps, tvs) => `Erfolgreich mit „${srv}“ verbunden! ${eps} South-Park-Folgen in der Mediathek erkannt, ${tvs} aktive(r) TV/Player gefunden.`,
+      secDataTitle: "Merkliste & Gesehen-Daten",
+      clearUserDataText: "Merkliste & Gesehen-Status zurücksetzen",
+      clearUserDataDone: "Merkliste & Gesehen-Status wurden geleert!",
+      modalCastHeading: "Jellyfin TV-Cast",
+      modalOpenJfSettings: "Mit Jellyfin verbinden, um Folge auf TV abzuspielen",
+      modalCastPlay: "Auf TV abspielen",
+      modalCasting: "Sende an TV...",
+      modalCastSent: (tv) => `\u2713 Wiedergabe auf „${tv}“ gestartet!`,
+      modalInLib: "\u2713 In Jellyfin-Mediathek",
+      modalNotInLib: "Nicht in lokaler Mediathek erkannt",
+      cardCastTitle: "Auf Jellyfin-TV abspielen",
       footer: "Inoffizielles Fan-Projekt \u00b7 South Park \u00a9 Comedy Central / Trey Parker &amp; Matt Stone \u00b7 Deutsch &amp; Englisch"
     },
     en: {
@@ -1160,6 +1485,46 @@
       iosTitle: "Install App on iPhone / iPad",
       iosSteps: "1. Tap the <b>Share</b> button in Safari's toolbar.<br>2. Scroll down and tap <b>'Add to Home Screen'</b>.<br>3. Tap <b>Add</b> in the top-right corner!",
       iosOk: "Got it",
+      settingsBtn: "Settings",
+      settingsTitle: "\u2699 Settings",
+      secLangTitle: "Language & Display",
+      prefLangLabel: "App Language",
+      optLangAuto: "Automatic (Browser Language)",
+      prefRoleLabel: "Default Character Filter Mode",
+      optRoleMain: "Main Character Only",
+      optRoleAll: "All Appearances",
+      prefDualLangLabel: "Second Language in Episode Details",
+      optDualOn: "Show (EN + DE Description)",
+      optDualOff: "Hide",
+      secJfTitle: "\ud83d\udcfa Jellyfin & TV Cast",
+      secJfDesc: "Connect your local Jellyfin server to cast and play selected South Park episodes directly on any Jellyfin-connected TV.",
+      jfNotConnected: "Not connected",
+      jfConnectedTo: (name, count) => `Connected: ${name} (${count} SP episodes)`,
+      jfUrlLabel: "Jellyfin Server URL (local IP or domain)",
+      jfAuthModeLabel: "Authentication Method",
+      jfModeUser: "Username & Password",
+      jfModeKey: "API Key / Token",
+      jfUserLabel: "Username",
+      jfPassLabel: "Password",
+      jfKeyLabel: "Jellyfin API Key or Access Token",
+      jfConnectBtn: "Connect & Scan Library",
+      jfConnecting: "Connecting...",
+      jfDisconnectBtn: "Disconnect",
+      jfTargetTvLabel: "Selected Target TV / Jellyfin Player",
+      jfRefreshBtn: "Scan TVs",
+      jfNoTvFound: "No active TV/player found (open Jellyfin app on your TV)",
+      jfConnectSuccess: (srv, eps, tvs) => `Connected to "${srv}"! Found ${eps} South Park episodes in library and ${tvs} active TV/player session(s).`,
+      secDataTitle: "Watchlist & Watched Data",
+      clearUserDataText: "Reset Watchlist & Watched Status",
+      clearUserDataDone: "Watchlist & Watched status cleared!",
+      modalCastHeading: "Jellyfin TV Cast",
+      modalOpenJfSettings: "Connect Jellyfin to cast episode to your TV",
+      modalCastPlay: "Play on TV",
+      modalCasting: "Sending to TV...",
+      modalCastSent: (tv) => `\u2713 Playback started on "${tv}"!`,
+      modalInLib: "\u2713 In Jellyfin Library",
+      modalNotInLib: "Not detected in local library",
+      cardCastTitle: "Cast to Jellyfin TV",
       footer: "Unofficial fan project \u00b7 South Park \u00a9 Comedy Central / Trey Parker &amp; Matt Stone \u00b7 German &amp; English"
     }
   };
@@ -1202,7 +1567,7 @@
   const state = {
     q: "",
     char: "",
-    roleMode: "main", // "main" | "all"
+    roleMode: (JF && JF.userPrefs && JF.userPrefs.defaultRole) ? JF.userPrefs.defaultRole : "main", // "main" | "all"
     theme: "",
     era: "",
     season: "",
@@ -1295,9 +1660,10 @@
     searchInput.placeholder = t.searchPlaceholder;
     document.getElementById('randomBtnText').textContent = t.randomBtn;
     document.getElementById('favFilterLabel').textContent = t.favBtn;
-    document.getElementById(' favCountBadge' ? 'favCountBadge' : '').textContent = `(${favSet.size})`;
+    document.getElementById('favCountBadge').textContent = `(${favSet.size})`;
     document.getElementById('watchedFilterLabel').textContent = t.unwatchedBtn;
     document.getElementById('pwaInstallLabel').textContent = t.installApp;
+    document.getElementById('settingsBtnLabel').textContent = t.settingsBtn;
     document.getElementById('charFilterTitle').textContent = t.charFilterTitle;
     roleMainBtn.textContent = t.roleMain;
     roleAllBtn.textContent = t.roleAll;
@@ -1529,12 +1895,16 @@
       const quote = lang === 'de' ? ep.quote_de : ep.quote_en;
       const tags = (lang === 'de' ? ep.tags_de : ep.tags_en).slice(0, 3);
       const suppChars = ep.chars.filter(c => !ep.main.includes(c)).slice(0, 3);
+      const jfConnected = Boolean(JF && JF.jfConfig && JF.jfConfig.connected);
+      const inJfLib = Boolean(jfConnected && JF.jfConfig.episodeMap && JF.jfConfig.episodeMap[key]);
 
       return `<article class="card ${isWatched ? 'watched-card' : ''}" data-key="${key}">
         <div class="card-top">
           <span class="tag-se ${ep.s === 0 ? 'special-se' : ''}">${formatSeCode(ep)}</span>
           <span class="ep-year">${ep.year}</span>
+          ${inJfLib ? `<span class="avail-tag" title="Jellyfin">JF</span>` : ''}
           <div class="card-actions">
+            ${jfConnected ? `<button type="button" class="mini-act cast-card-btn" data-act="cast" data-key="${key}" title="${t.cardCastTitle}">\ud83d\udcfa</button>` : ''}
             <button type="button" class="mini-act ${isFav ? 'fav-on' : ''}" data-act="fav" data-key="${key}" title="Watchlist">${isFav ? '\u2605' : '\u2606'}</button>
             <button type="button" class="mini-act ${isWatched ? 'watch-on' : ''}" data-act="watch" data-key="${key}" title="Watched">\u2713</button>
           </div>
@@ -1573,7 +1943,14 @@
     }
 
     document.getElementById('modalDesc').innerHTML = lang === 'de' ? ep.desc_de : ep.desc_en;
-    document.getElementById('modalAltDesc').innerHTML = `<strong>${t.modalAltLangPrefix}</strong>` + (lang === 'de' ? ep.desc_en : ep.desc_de);
+    const altDescEl = document.getElementById('modalAltDesc');
+    const showDual = !JF || JF.userPrefs.showDualLang !== false;
+    if (showDual) {
+      altDescEl.style.display = 'block';
+      altDescEl.innerHTML = `<strong>${t.modalAltLangPrefix}</strong>` + (lang === 'de' ? ep.desc_en : ep.desc_de);
+    } else {
+      altDescEl.style.display = 'none';
+    }
 
     document.getElementById('modalMainCharsLabel').textContent = t.modalMainChars;
     document.getElementById('modalMainChars').innerHTML = ep.main.map(c =>
@@ -1606,7 +1983,166 @@
     document.getElementById('modalTags').innerHTML = [...themeBtns, ...tagBtns].join('');
 
     updateModalActionButtons();
+    renderModalCastPanel();
     modal.classList.add('open');
+  }
+
+  function closeModals() {
+    document.getElementById('epModal').classList.remove('open');
+    document.getElementById('iosModal').classList.remove('open');
+    document.getElementById('settingsModal').classList.remove('open');
+    activeModalEp = null;
+  }
+
+  // ---- Jellyfin & Settings UI Logic ----
+  function populateTvDropdowns() {
+    const t = I18N[lang];
+    const sessions = JF ? JF.getActiveSessions() : [];
+    const selectedId = (JF && JF.jfConfig && JF.jfConfig.selectedSessionId) || '';
+
+    const optsHtml = sessions.length === 0
+      ? `<option value="">${t.jfNoTvFound}</option>`
+      : sessions.map(s => {
+          const dev = s.DeviceName || s.Client || 'TV';
+          const client = s.Client ? ` (${s.Client})` : '';
+          const user = s.UserName ? ` \u00b7 ${s.UserName}` : '';
+          const sel = s.Id === selectedId ? 'selected' : '';
+          return `<option value="${s.Id}" ${sel}>\ud83d\udcfa ${dev}${client}${user}</option>`;
+        }).join('');
+
+    const modalSel = document.getElementById('modalTvSelect');
+    const settingsSel = document.getElementById('jfSettingsTvSelect');
+    if (modalSel) modalSel.innerHTML = optsHtml;
+    if (settingsSel) settingsSel.innerHTML = optsHtml;
+  }
+
+  function updateJfConnectionIndicators() {
+    const t = I18N[lang];
+    const cfg = JF ? JF.jfConfig : { connected: false };
+    const isConn = Boolean(cfg && cfg.connected && cfg.serverUrl && cfg.accessToken);
+
+    document.getElementById('jfTopDot').classList.toggle('online', isConn);
+    document.getElementById('modalJfDot').classList.toggle('online', isConn);
+
+    const badge = document.getElementById('jfConnBadge');
+    const discBtn = document.getElementById('jfDisconnectBtn');
+    if (isConn) {
+      const epCount = Object.keys(cfg.episodeMap || {}).length;
+      badge.textContent = t.jfConnectedTo(cfg.serverName || 'Jellyfin', epCount);
+      badge.style.background = '#dcfce7';
+      badge.style.color = '#14532d';
+      discBtn.style.display = 'inline-flex';
+    } else {
+      badge.textContent = t.jfNotConnected;
+      badge.style.background = '#e2e8f0';
+      badge.style.color = '#334155';
+      discBtn.style.display = 'none';
+    }
+    populateTvDropdowns();
+  }
+
+  function renderModalCastPanel() {
+    if (!activeModalEp) return;
+    const t = I18N[lang];
+    const cfg = JF ? JF.jfConfig : { connected: false };
+    const isConn = Boolean(cfg && cfg.connected && cfg.serverUrl && cfg.accessToken);
+    const key = epKey(activeModalEp);
+
+    document.getElementById('modalCastHeading').textContent = t.modalCastHeading;
+    document.getElementById('modalOpenJfSettingsText').textContent = t.modalOpenJfSettings;
+    document.getElementById('modalCastPlayText').textContent = t.modalCastPlay;
+
+    const statusEl = document.getElementById('modalCastStatus');
+    statusEl.className = 'cast-status';
+    statusEl.textContent = '';
+
+    const notConnBox = document.getElementById('modalCastNotConnected');
+    const connBox = document.getElementById('modalCastConnected');
+    const libBadge = document.getElementById('modalJfLibBadge');
+    const webLink = document.getElementById('modalOpenWebLink');
+
+    if (!isConn) {
+      notConnBox.style.display = 'block';
+      connBox.style.display = 'none';
+      libBadge.style.display = 'none';
+      webLink.style.display = 'none';
+      return;
+    }
+
+    notConnBox.style.display = 'none';
+    connBox.style.display = 'flex';
+    populateTvDropdowns();
+
+    const matched = cfg.episodeMap && cfg.episodeMap[key];
+    libBadge.style.display = 'inline-block';
+    if (matched && matched.id) {
+      libBadge.textContent = t.modalInLib;
+      libBadge.style.background = '#dcfce7';
+      libBadge.style.color = '#166534';
+      webLink.href = `${cfg.serverUrl.replace(/\/+$/, '')}/web/index.html#!/details?id=${encodeURIComponent(matched.id)}`;
+      webLink.style.display = 'inline-flex';
+    } else {
+      libBadge.textContent = t.modalNotInLib;
+      libBadge.style.background = '#fef3c7';
+      libBadge.style.color = '#92400e';
+      webLink.style.display = 'none';
+    }
+  }
+
+  function renderSettingsModalTexts() {
+    const t = I18N[lang];
+    document.getElementById('settingsModalTitle').textContent = t.settingsTitle;
+    document.getElementById('secLangTitle').textContent = t.secLangTitle;
+    document.getElementById('prefLangLabel').textContent = t.prefLangLabel;
+    document.getElementById('optLangAuto').textContent = t.optLangAuto;
+    document.getElementById('prefRoleLabel').textContent = t.prefRoleLabel;
+    document.getElementById('optRoleMain').textContent = t.optRoleMain;
+    document.getElementById('optRoleAll').textContent = t.optRoleAll;
+    document.getElementById('prefDualLangLabel').textContent = t.prefDualLangLabel;
+    document.getElementById('optDualOn').textContent = t.optDualOn;
+    document.getElementById('optDualOff').textContent = t.optDualOff;
+
+    document.getElementById('secJfTitle').textContent = t.secJfTitle;
+    document.getElementById('secJfDesc').textContent = t.secJfDesc;
+    document.getElementById('jfUrlLabel').textContent = t.jfUrlLabel;
+    document.getElementById('jfAuthModeLabel').textContent = t.jfAuthModeLabel;
+    document.getElementById('jfModeUserBtn').textContent = t.jfModeUser;
+    document.getElementById('jfModeKeyBtn').textContent = t.jfModeKey;
+    document.getElementById('jfUserLabel').textContent = t.jfUserLabel;
+    document.getElementById('jfUserInput').placeholder = t.jfUserLabel;
+    document.getElementById('jfPassLabel').textContent = t.jfPassLabel;
+    document.getElementById('jfKeyLabel').textContent = t.jfKeyLabel;
+    document.getElementById('jfConnectBtn').textContent = t.jfConnectBtn;
+    document.getElementById('jfDisconnectBtn').textContent = t.jfDisconnectBtn;
+    document.getElementById('jfTargetTvLabel').textContent = t.jfTargetTvLabel;
+    document.getElementById('jfRefreshBtnText').textContent = t.jfRefreshBtn;
+    document.getElementById('secDataTitle').textContent = t.secDataTitle;
+    document.getElementById('clearUserDataText').textContent = t.clearUserDataText;
+
+    if (JF) {
+      document.getElementById('prefLangSelect').value = JF.userPrefs.langMode || 'auto';
+      document.getElementById('prefRoleSelect').value = JF.userPrefs.defaultRole || 'main';
+      document.getElementById('prefDualLangSelect').value = JF.userPrefs.showDualLang === false ? '0' : '1';
+      document.getElementById('jfUrlInput').value = JF.jfConfig.serverUrl || '';
+      document.getElementById('jfUserInput').value = JF.jfConfig.username || '';
+      const isKeyMode = JF.jfConfig.authMode === 'apikey';
+      document.getElementById('jfModeUserBtn').classList.toggle('active', !isKeyMode);
+      document.getElementById('jfModeKeyBtn').classList.toggle('active', isKeyMode);
+      document.getElementById('jfUserPassFields').style.display = isKeyMode ? 'none' : 'flex';
+      document.getElementById('jfApiKeyFields').style.display = isKeyMode ? 'flex' : 'none';
+      if (isKeyMode && JF.jfConfig.accessToken) {
+        document.getElementById('jfKeyInput').value = JF.jfConfig.accessToken;
+      }
+    }
+    updateJfConnectionIndicators();
+  }
+
+  function openSettingsModal() {
+    renderSettingsModalTexts();
+    document.getElementById('settingsModal').classList.add('open');
+    if (JF && JF.jfConfig.connected) {
+      JF.refreshSessions().then(populateTvDropdowns).catch(() => {});
+    }
   }
 
   function updateModalActionButtons() {
@@ -1627,18 +2163,18 @@
     document.getElementById('modalCopyBtn').textContent = `${t.copyCode} (${formatSeCode(activeModalEp)})`;
   }
 
-  function closeModals() {
-    document.getElementById('epModal').classList.remove('open');
-    document.getElementById('iosModal').classList.remove('open');
-    activeModalEp = null;
-  }
-
   // ---- Event Listeners ----
   document.querySelector('.lang-switch').addEventListener('click', (e) => {
     const btn = e.target.closest('.lang-btn');
     if (!btn) return;
     lang = btn.dataset.lang;
-    try { localStorage.setItem('sp_lang', lang); } catch (_) {}
+    try {
+      localStorage.setItem('sp_lang', lang);
+      if (JF) {
+        JF.userPrefs.langMode = lang;
+        JF.savePrefs();
+      }
+    } catch (_) {}
     renderFilterControls();
     applyFilters();
   });
@@ -1796,6 +2332,17 @@
     if (actBtn) {
       e.stopPropagation();
       const key = actBtn.dataset.key;
+      if (actBtn.dataset.act === 'cast') {
+        const ep = DATA.find(x => epKey(x) === key);
+        if (ep) {
+          openEpisodeModal(ep);
+          setTimeout(() => {
+            const castPlayBtn = document.getElementById('modalCastPlayBtn');
+            if (castPlayBtn) castPlayBtn.click();
+          }, 120);
+        }
+        return;
+      }
       if (actBtn.dataset.act === 'fav') {
         if (favSet.has(key)) favSet.delete(key);
         else favSet.add(key);
@@ -1820,14 +2367,199 @@
   document.getElementById('modalCloseBtn').addEventListener('click', closeModals);
   document.getElementById('iosCloseBtn').addEventListener('click', closeModals);
   document.getElementById('iosOkBtn').addEventListener('click', closeModals);
+  document.getElementById('settingsCloseBtn').addEventListener('click', closeModals);
+  document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+  document.getElementById('modalOpenJfSettingsBtn').addEventListener('click', () => {
+    document.getElementById('epModal').classList.remove('open');
+    openSettingsModal();
+  });
   document.getElementById('epModal').addEventListener('click', (e) => {
     if (e.target.id === 'epModal') closeModals();
   });
   document.getElementById('iosModal').addEventListener('click', (e) => {
     if (e.target.id === 'iosModal') closeModals();
   });
+  document.getElementById('settingsModal').addEventListener('click', (e) => {
+    if (e.target.id === 'settingsModal') closeModals();
+  });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModals();
+  });
+
+  // Settings Modal Controls
+  document.getElementById('prefLangSelect').addEventListener('change', (e) => {
+    const mode = e.target.value;
+    if (JF) {
+      JF.userPrefs.langMode = mode;
+      JF.savePrefs();
+    }
+    if (mode === 'auto') {
+      try { localStorage.removeItem('sp_lang'); } catch (_) {}
+    } else {
+      try { localStorage.setItem('sp_lang', mode); } catch (_) {}
+    }
+    lang = resolveLanguage(mode);
+    renderFilterControls();
+    renderSettingsModalTexts();
+    applyFilters();
+  });
+
+  document.getElementById('prefRoleSelect').addEventListener('change', (e) => {
+    const role = e.target.value;
+    if (JF) {
+      JF.userPrefs.defaultRole = role;
+      JF.savePrefs();
+    }
+    state.roleMode = role;
+    renderFilterControls();
+    applyFilters();
+  });
+
+  document.getElementById('prefDualLangSelect').addEventListener('change', (e) => {
+    const show = e.target.value === '1';
+    if (JF) {
+      JF.userPrefs.showDualLang = show;
+      JF.savePrefs();
+    }
+  });
+
+  document.getElementById('jfModeUserBtn').addEventListener('click', () => {
+    if (JF) JF.jfConfig.authMode = 'userpass';
+    document.getElementById('jfModeUserBtn').classList.add('active');
+    document.getElementById('jfModeKeyBtn').classList.remove('active');
+    document.getElementById('jfUserPassFields').style.display = 'flex';
+    document.getElementById('jfApiKeyFields').style.display = 'none';
+  });
+
+  document.getElementById('jfModeKeyBtn').addEventListener('click', () => {
+    if (JF) JF.jfConfig.authMode = 'apikey';
+    document.getElementById('jfModeKeyBtn').classList.add('active');
+    document.getElementById('jfModeUserBtn').classList.remove('active');
+    document.getElementById('jfUserPassFields').style.display = 'none';
+    document.getElementById('jfApiKeyFields').style.display = 'flex';
+  });
+
+  document.getElementById('jfConnectBtn').addEventListener('click', async () => {
+    if (!JF) return;
+    const t = I18N[lang];
+    const btn = document.getElementById('jfConnectBtn');
+    const statusBox = document.getElementById('jfSettingsStatus');
+    const authMode = document.getElementById('jfModeKeyBtn').classList.contains('active') ? 'apikey' : 'userpass';
+
+    btn.disabled = true;
+    btn.textContent = t.jfConnecting;
+    statusBox.className = 'cast-status show';
+    statusBox.textContent = t.jfConnecting;
+
+    try {
+      const cfg = await JF.connectAndSyncJellyfin({
+        serverUrl: document.getElementById('jfUrlInput').value,
+        authMode,
+        username: document.getElementById('jfUserInput').value,
+        password: document.getElementById('jfPassInput').value,
+        apiKey: document.getElementById('jfKeyInput').value
+      });
+      const epCount = Object.keys(cfg.episodeMap || {}).length;
+      const tvCount = JF.getActiveSessions().length;
+      statusBox.className = 'cast-status show ok';
+      statusBox.textContent = t.jfConnectSuccess(cfg.serverName || 'Jellyfin', epCount, tvCount);
+      updateJfConnectionIndicators();
+      applyFilters();
+    } catch (err) {
+      statusBox.className = 'cast-status show err';
+      statusBox.textContent = err.message || String(err);
+      updateJfConnectionIndicators();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t.jfConnectBtn;
+    }
+  });
+
+  document.getElementById('jfDisconnectBtn').addEventListener('click', () => {
+    if (!JF) return;
+    JF.disconnectJellyfin();
+    const statusBox = document.getElementById('jfSettingsStatus');
+    statusBox.className = 'cast-status';
+    statusBox.textContent = '';
+    updateJfConnectionIndicators();
+    applyFilters();
+  });
+
+  async function handleRefreshTvs() {
+    if (!JF || !JF.jfConfig.connected) return;
+    try {
+      await JF.refreshSessions();
+      populateTvDropdowns();
+    } catch (_) {}
+  }
+
+  document.getElementById('jfRefreshSessionsBtn').addEventListener('click', handleRefreshTvs);
+  document.getElementById('modalRefreshTvsBtn').addEventListener('click', handleRefreshTvs);
+
+  function handleTvSelectChange(e) {
+    if (!JF) return;
+    const sessionId = e.target.value;
+    JF.jfConfig.selectedSessionId = sessionId;
+    const found = JF.getActiveSessions().find(s => s.Id === sessionId);
+    if (found) {
+      JF.jfConfig.selectedDeviceName = found.DeviceName || found.Client || 'TV';
+    }
+    JF.saveJfConfig();
+    populateTvDropdowns();
+  }
+
+  document.getElementById('jfSettingsTvSelect').addEventListener('change', handleTvSelectChange);
+  document.getElementById('modalTvSelect').addEventListener('change', handleTvSelectChange);
+
+  document.getElementById('modalCastPlayBtn').addEventListener('click', async () => {
+    if (!JF || !activeModalEp) return;
+    const t = I18N[lang];
+    const playBtn = document.getElementById('modalCastPlayBtn');
+    const statusEl = document.getElementById('modalCastStatus');
+    const chosenSession = document.getElementById('modalTvSelect').value;
+
+    playBtn.disabled = true;
+    statusEl.className = 'cast-status show';
+    statusEl.textContent = t.modalCasting;
+
+    try {
+      await JF.castEpisodeToTv(activeModalEp, chosenSession);
+      const sessObj = JF.getActiveSessions().find(s => s.Id === (chosenSession || JF.jfConfig.selectedSessionId));
+      const tvName = sessObj ? (sessObj.DeviceName || sessObj.Client || 'TV') : (JF.jfConfig.selectedDeviceName || 'TV');
+      statusEl.className = 'cast-status show ok';
+      statusEl.textContent = t.modalCastSent(tvName);
+
+      // Mark episode as watched automatically or keep ready
+      renderModalCastPanel();
+      statusEl.className = 'cast-status show ok';
+      statusEl.textContent = t.modalCastSent(tvName);
+    } catch (err) {
+      statusEl.className = 'cast-status show err';
+      statusEl.textContent = err.message || String(err);
+    } finally {
+      playBtn.disabled = false;
+    }
+  });
+
+  document.getElementById('modalRemotePauseBtn').addEventListener('click', () => {
+    if (JF) JF.sendRemoteCommand('PlayPause', document.getElementById('modalTvSelect').value).catch(() => {});
+  });
+
+  document.getElementById('modalRemoteStopBtn').addEventListener('click', () => {
+    if (JF) JF.sendRemoteCommand('Stop', document.getElementById('modalTvSelect').value).catch(() => {});
+  });
+
+  document.getElementById('clearUserDataBtn').addEventListener('click', () => {
+    const t = I18N[lang];
+    favSet.clear();
+    watchedSet.clear();
+    saveSet('sp_favs', favSet);
+    saveSet('sp_watched', watchedSet);
+    applyFilters();
+    const btn = document.getElementById('clearUserDataText');
+    const orig = btn.textContent;
+    btn.textContent = t.clearUserDataDone;
+    setTimeout(() => { btn.textContent = orig; }, 1800);
   });
 
   document.querySelector('.modal-sheet').addEventListener('click', (e) => {
@@ -1959,6 +2691,10 @@
   });
 
   // Initial Render
+  updateJfConnectionIndicators();
+  if (JF && JF.jfConfig.connected) {
+    JF.refreshSessions().then(populateTvDropdowns).catch(() => {});
+  }
   renderFilterControls();
   applyFilters();
 

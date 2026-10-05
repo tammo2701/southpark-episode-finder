@@ -1,8 +1,9 @@
-const CACHE_NAME = "folgen-finder-v3";
+const CACHE_NAME = "folgen-finder-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./episodes.js",
+  "./jellyfin.js",
   "./manifest.json",
   "./icons/favicon-16.png",
   "./icons/favicon-32.png",
@@ -31,6 +32,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+
+  // Only handle same-origin assets or Google Fonts (let local Jellyfin LAN requests pass directly)
+  const isGoogleFont = url.hostname.includes("fonts.googleapis.com") || url.hostname.includes("fonts.gstatic.com");
+  if (url.origin !== self.location.origin && !isGoogleFont) {
+    return;
+  }
 
   // Cache-first for fonts and icons
   if (
