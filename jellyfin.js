@@ -3,7 +3,6 @@
   const STORAGE_KEY_JF = 'sp_jellyfin_cfg';
   const STORAGE_KEY_PREFS = 'sp_user_prefs';
 
-  // Unique persistent DeviceId for Jellyfin authentication
   function getDeviceId() {
     try {
       let id = localStorage.getItem('sp_jf_device_id');
@@ -34,7 +33,7 @@
 
   const jfConfig = loadJson(STORAGE_KEY_JF, {
     serverUrl: '',
-    authMode: 'userpass', // 'userpass' | 'apikey'
+    authMode: 'apikey', // 'apikey' | 'userpass'
     username: '',
     accessToken: '',
     userId: '',
@@ -68,7 +67,6 @@
     }
   }
 
-  // Normalize URL: auto-prepend http:// if missing, strip trailing slashes and /web/index.html
   function cleanServerUrl(url) {
     let u = (url || '').trim();
     if (!u) return '';
@@ -89,18 +87,39 @@
     return hdr;
   }
 
-  // Append api_key or Emby auth query parameters so GET and POST without custom headers work CORS-preflight-free!
   function appendTokenToUrl(rawUrl, token) {
     if (!token) return rawUrl;
     const sep = rawUrl.includes('?') ? '&' : '?';
     return `${rawUrl}${sep}api_key=${encodeURIComponent(token)}`;
   }
 
+  // Probe whether the browser blocks HTTP requests from HTTPS due to "Insecure Content" (Mixed Content)
+  // vs "Local Network Access" vs Server unreachable
+  async function diagnoseConnectionProblem(baseUrl) {
+    const isDe = document.documentElement.lang === 'de';
+    const pageIsHttps = window.location.protocol === 'https:';
+    const targetIsHttp = baseUrl.toLowerCase().startsWith('http://');
+
+    if (pageIsHttps && targetIsHttp) {
+      // Try no-cors probe to see if the browser blocks the request before it even leaves (Mixed Content)
+      try {
+        await fetch(`${baseUrl}/System/Info/Public`, { mode: 'no-cors', cache: 'no-store' });
+        // If no-cors succeeds, Mixed Content & Local Network ARE allowed, so it was a CORS header or endpoint issue!
+      } catch (_) {
+        // Browser blocked even a no-cors request -> "Insecure content" (Unsichere Inhalte) is still blocked in Chrome/Edge/Brave!
+        throw new Error(isDe
+          ? `WICHTIG: „Lokales Netzwerk“ allein reicht bei HTTPS (${window.location.hostname}) nicht aus – der Browser blockiert noch „Unsichere Inhalte“ (HTTP). Lösung in 3 Klicks: 1. Klicke links in der Adresszeile auf das Einstellungs-Symbol \u2192 „Website-Einstellungen“. 2. Scrolle zu „Unsichere Inhalte“ (Insecure content) und stelle es von „Blockieren“ auf „Zulassen“. 3. Lade die Seite neu.`
+          : `IMPORTANT: Allowing "Local Network" alone is not enough on HTTPS (${window.location.hostname}) — the browser is still blocking "Insecure content" (HTTP). Fix in 3 clicks: 1. Click the tune/lock icon in the address bar \u2192 "Site settings". 2. Scroll to "Insecure content" and change it from "Block" to "Allow". 3. Reload this page.`);
+      }
+    }
+
+    throw new Error(isDe
+      ? `Jellyfin-Server unter „${baseUrl}“ nicht erreichbar. Bitte prüfe IP & Port (z.B. :8096) und ob du im selben WLAN bist.`
+      : `Could not reach Jellyfin server at "${baseUrl}". Please check IP & port (e.g. :8096) and ensure you are on the same network.`);
+  }
+
   // Smart Jellyfin Fetch:
-  // 1. For GET or headerless POSTs, avoids non-simple custom headers first so Jellyfin servers without preflight setup still respond.
-  // 2. Falls back to full X-Emby-Authorization header fetch.
-  // 3. Falls back to backend proxy if reachable.
-  // 4. Produces accurate, non-misleading diagnostics on failure.
+  // Avoids CORS preflight (OPTIONS) whenever possible because Jellyfin returns 405 Method Not Allowed on OPTIONS from external origins unless specially configured.
   async function jfFetch(path, options = {}) {
     const base = cleanServerUrl(jfConfig.serverUrl);
     if (!base) throw new Error('Server URL missing');
@@ -109,48 +128,36 @@
     const token = options.token !== undefined ? options.token : jfConfig.accessToken;
     const rawUrl = `${base}${cleanPath}`;
     const urlWithToken = appendTokenToUrl(rawUrl, token);
+    const isDe = document.documentElement.lang === 'de';
 
-    // Attempt 1: Simple CORS request (no custom X-Emby-* headers that trigger OPTIONS preflight)
-    // Works for all GET requests, /Users/AuthenticateByName (with text/plain JSON or X-Emby-Authorization), and POST commands with query params
-    if (!options.forceCustomHeaders) {
+    // Attempt 1: Pure CORS-Simple Request (ZERO custom headers, no application/json Content-Type on empty body)
+    // This completely skips the browser's OPTIONS preflight request!
+    if (!cleanPath.includes('/Users/AuthenticateByName') && method !== 'DELETE') {
       try {
-        const simpleHeaders = {};
-        let targetUrl = urlWithToken;
-
-        if (cleanPath.includes('/Users/AuthenticateByName')) {
-          // AuthenticateByName requires Authorization or X-Emby-Authorization
-          simpleHeaders['X-Emby-Authorization'] = buildEmbyAuthHeader('');
-          simpleHeaders['Content-Type'] = 'application/json';
-          targetUrl = rawUrl;
-        } else if (options.body) {
-          simpleHeaders['Content-Type'] = 'application/json';
+        const simpleOpts = { method };
+        if (options.body) {
+          // Use text/plain if possible or application/json
+          simpleOpts.headers = { 'Content-Type': 'application/json' };
+          simpleOpts.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
         }
-
-        const res = await fetch(targetUrl, {
-          method,
-          headers: simpleHeaders,
-          body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
-        });
-
+        const res = await fetch(urlWithToken, simpleOpts);
         if (res.ok) {
           const text = await res.text();
           return text ? JSON.parse(text) : {};
         }
         if (res.status === 401 || res.status === 403) {
-          const isDe = document.documentElement.lang === 'de';
           throw new Error(isDe
-            ? `Anmeldung fehlgeschlagen (HTTP ${res.status}): Bitte Benutzername/Passwort oder API-Key prüfen.`
-            : `Authentication failed (HTTP ${res.status}): Please check your username/password or API key.`);
+            ? `Zugriff verweigert (HTTP ${res.status}): Bitte API-Key oder Zugangsdaten prüfen.`
+            : `Access denied (HTTP ${res.status}): Please check your API key or credentials.`);
         }
       } catch (err1) {
         if (err1 && err1.message && (err1.message.includes('401') || err1.message.includes('403'))) {
           throw err1;
         }
-        // Otherwise proceed to Attempt 2
       }
     }
 
-    // Attempt 2: Full X-Emby-Authorization & X-Emby-Token headers
+    // Attempt 2: Full X-Emby-Authorization header request
     const fullHeaders = {
       'Accept': 'application/json',
       'X-Emby-Authorization': buildEmbyAuthHeader(token),
@@ -170,38 +177,36 @@
         body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
       });
       if (!res2.ok) {
+        if (res2.status === 401 || res2.status === 403) {
+          throw new Error(isDe
+            ? `Anmeldung fehlgeschlagen (HTTP ${res2.status}): Ungültiger Benutzername, Passwort oder API-Key.`
+            : `Authentication failed (HTTP ${res2.status}): Invalid username, password, or API key.`);
+        }
         const errText = await res2.text().catch(() => '');
         throw new Error(`HTTP ${res2.status}: ${errText || res2.statusText}`);
       }
       const text2 = await res2.text();
       return text2 ? JSON.parse(text2) : {};
     } catch (directErr) {
-      // Attempt 3: Server-side proxy (works if running locally via node server.js or public domain)
-      try {
-        const proxyRes = await fetch('/api/jellyfin-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: urlWithToken, method, headers: fullHeaders, body: options.body })
-        });
-        if (proxyRes.ok) {
-          const t = await proxyRes.text();
-          return t ? JSON.parse(t) : {};
-        }
-      } catch (_) {}
-
-      const isDe = document.documentElement.lang === 'de';
-      const pageIsHttps = window.location.protocol === 'https:';
-      const targetIsHttp = rawUrl.toLowerCase().startsWith('http://');
-
-      if (pageIsHttps && targetIsHttp) {
-        throw new Error(isDe
-          ? `Verbindung zu ${base} wurde vom Browser blockiert, weil diese App aktuell über HTTPS (${window.location.origin}) geöffnet ist, dein Jellyfin aber über unverschlüsseltes HTTP läuft (oder im lokalen Netzwerk nicht erreichbar ist). Tipp: Erlaube in den Browser-Website-Einstellungen für diese Seite „Unsichere Inhalte / Lokales Netzwerk“ oder öffne die App lokal über HTTP.`
-          : `Connection to ${base} was blocked by the browser because this app is loaded over HTTPS (${window.location.origin}) while your Jellyfin server uses HTTP (or is unreachable). Tip: Allow "Insecure content / Local network" in your browser site settings or run the app locally over HTTP.`);
+      if (directErr && directErr.message && directErr.message.startsWith('HTTP ')) {
+        throw directErr;
+      }
+      if (directErr && directErr.message && (directErr.message.includes('401') || directErr.message.includes('403'))) {
+        throw directErr;
       }
 
-      throw new Error(isDe
-        ? `Jellyfin-Server unter „${base}“ nicht erreichbar (${directErr.message || 'Netzwerkfehler'}). Bitte prüfe, ob IP & Port (z.B. :8096) stimmen und du im selben WLAN/Netzwerk bist.`
-        : `Could not reach Jellyfin server at "${base}" (${directErr.message || 'Network error'}). Please verify the IP & port (e.g. :8096) and that you are on the same network.`);
+      // If /Users/AuthenticateByName failed due to CORS preflight (because Jellyfin blocks custom X-Emby-Authorization on OPTIONS from https://southfinder.pages.dev)
+      if (cleanPath.includes('/Users/AuthenticateByName')) {
+        // First check if Mixed Content ("Unsichere Inhalte") is the blocker
+        await diagnoseConnectionProblem(base);
+        // If Mixed Content is NOT blocked (no-cors succeeded), then Jellyfin rejected the OPTIONS preflight for /Users/AuthenticateByName!
+        throw new Error(isDe
+          ? 'Dein Jellyfin-Server ist erreichbar, blockiert aber die Passwort-Anmeldung von externen Domains (CORS-Preflight). Bitte wechsle oben auf „API-Key / Token“ (in Jellyfin unter Dashboard \u2192 API-Schlüssel erstellen) – damit funktioniert die Verbindung sofort ohne CORS-Blockade!'
+          : 'Your Jellyfin server is reachable, but blocks password login from external domains (CORS preflight). Please switch to "API Key / Token" above (create one in Jellyfin under Dashboard \u2192 API Keys) — it works immediately without CORS preflight!');
+      }
+
+      await diagnoseConnectionProblem(base);
+      throw directErr;
     }
   }
 
@@ -215,7 +220,7 @@
       throw new Error(document.documentElement.lang === 'de' ? 'Bitte gib deine Jellyfin Server-URL ein.' : 'Please enter your Jellyfin Server URL.');
     }
 
-    // 1. Public server info check
+    // 1. Public server info check (Simple GET - no preflight!)
     const pubInfo = await jfFetch('/System/Info/Public', { token: '' });
     jfConfig.serverName = pubInfo.ServerName || 'Jellyfin Server';
 
@@ -270,7 +275,6 @@
       return epMap;
     }
 
-    // Ensure we have a valid userId so Jellyfin returns UserData (Played status)
     if (!jfConfig.userId) {
       try {
         const users = await jfFetch('/Users');
@@ -312,7 +316,6 @@
         recordItems((epsRes && epsRes.Items) || []);
       }
 
-      // Also search Episode items directly in case Specials or loose episodes are stored separately
       if (Object.keys(epMap).length === 0) {
         const epsRes = await jfFetch(`${userPath}?IncludeItemTypes=Episode&Recursive=true&Fields=UserData&SearchTerm=${encodeURIComponent('South Park')}&Limit=500`);
         const items = ((epsRes && epsRes.Items) || []).filter(it =>
@@ -379,7 +382,6 @@
     return activeSessions;
   }
 
-  // Find Jellyfin ItemId for a given South Park episode { s, e, title }
   async function resolveEpisodeItemId(ep) {
     const key = `S${ep.s}E${ep.e}`;
     if (jfConfig.episodeMap && jfConfig.episodeMap[key] && jfConfig.episodeMap[key].id) {
@@ -406,7 +408,6 @@
     return null;
   }
 
-  // Cast / Play Episode on Selected Jellyfin TV Session
   async function castEpisodeToTv(ep, sessionIdOverride) {
     const isDe = document.documentElement.lang === 'de';
     if (!jfConfig.connected || !jfConfig.serverUrl || !jfConfig.accessToken) {
@@ -434,7 +435,6 @@
     return { itemId, sessionId: targetSessionId };
   }
 
-  // Remote control commands (PlayPause, Stop, Mute, Unmute)
   async function sendRemoteCommand(command, sessionIdOverride) {
     const targetSessionId = sessionIdOverride || jfConfig.selectedSessionId;
     if (!targetSessionId) return;
