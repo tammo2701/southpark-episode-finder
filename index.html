@@ -1177,6 +1177,7 @@
 
       <div class="cast-row">
         <button type="button" class="cast-btn-main" id="jfConnectBtn">Verbinden &amp; Mediathek scannen</button>
+        <button type="button" class="top-btn" id="jfSyncWatchedBtn" style="display:none;">&#8635; <span id="jfSyncWatchedText">Gesehen-Status synchronisieren</span></button>
         <button type="button" class="top-btn" id="jfDisconnectBtn" style="display:none;">Trennen</button>
       </div>
 
@@ -1384,10 +1385,12 @@
       jfConnectBtn: "Verbinden & Mediathek scannen",
       jfConnecting: "Verbinde...",
       jfDisconnectBtn: "Trennen",
+      jfSyncWatchedBtn: "Gesehen-Stand synchronisieren",
+      jfSyncWatchedDone: (watchedCnt, totalCnt) => `\u2713 Synchronisiert: ${watchedCnt} gesehene Folgen aus Jellyfin übernommen (${totalCnt} Folgen in Mediathek).`,
       jfTargetTvLabel: "Ausgewählter TV / Jellyfin-Player",
       jfRefreshBtn: "TVs suchen",
       jfNoTvFound: "Kein aktiver TV/Player gefunden (bitte Jellyfin am TV öffnen)",
-      jfConnectSuccess: (srv, eps, tvs) => `Erfolgreich mit „${srv}“ verbunden! ${eps} South-Park-Folgen in der Mediathek erkannt, ${tvs} aktive(r) TV/Player gefunden.`,
+      jfConnectSuccess: (srv, eps, watchedCnt, tvs) => `Erfolgreich mit „${srv}“ verbunden! ${eps} South-Park-Folgen erkannt, ${watchedCnt} gesehene Folgen synchronisiert, ${tvs} aktive(r) TV/Player gefunden.`,
       secDataTitle: "Merkliste & Gesehen-Daten",
       clearUserDataText: "Merkliste & Gesehen-Status zurücksetzen",
       clearUserDataDone: "Merkliste & Gesehen-Status wurden geleert!",
@@ -1510,10 +1513,12 @@
       jfConnectBtn: "Connect & Scan Library",
       jfConnecting: "Connecting...",
       jfDisconnectBtn: "Disconnect",
+      jfSyncWatchedBtn: "Sync Watched Status",
+      jfSyncWatchedDone: (watchedCnt, totalCnt) => `\u2713 Synced: ${watchedCnt} watched episodes imported from Jellyfin (${totalCnt} episodes in library).`,
       jfTargetTvLabel: "Selected Target TV / Jellyfin Player",
       jfRefreshBtn: "Scan TVs",
       jfNoTvFound: "No active TV/player found (open Jellyfin app on your TV)",
-      jfConnectSuccess: (srv, eps, tvs) => `Connected to "${srv}"! Found ${eps} South Park episodes in library and ${tvs} active TV/player session(s).`,
+      jfConnectSuccess: (srv, eps, watchedCnt, tvs) => `Connected to "${srv}"! Found ${eps} South Park episodes, synced ${watchedCnt} watched episodes, and found ${tvs} active TV/player(s).`,
       secDataTitle: "Watchlist & Watched Data",
       clearUserDataText: "Reset Watchlist & Watched Status",
       clearUserDataDone: "Watchlist & Watched status cleared!",
@@ -2026,19 +2031,50 @@
 
     const badge = document.getElementById('jfConnBadge');
     const discBtn = document.getElementById('jfDisconnectBtn');
+    const syncBtn = document.getElementById('jfSyncWatchedBtn');
     if (isConn) {
       const epCount = Object.keys(cfg.episodeMap || {}).length;
       badge.textContent = t.jfConnectedTo(cfg.serverName || 'Jellyfin', epCount);
       badge.style.background = '#dcfce7';
       badge.style.color = '#14532d';
       discBtn.style.display = 'inline-flex';
+      if (syncBtn) syncBtn.style.display = 'inline-flex';
     } else {
       badge.textContent = t.jfNotConnected;
       badge.style.background = '#e2e8f0';
       badge.style.color = '#334155';
       discBtn.style.display = 'none';
+      if (syncBtn) syncBtn.style.display = 'none';
     }
     populateTvDropdowns();
+  }
+
+  // Merge Jellyfin UserData.Played status into local watchedSet
+  function applyJellyfinWatchedToLocal(epMap) {
+    if (!epMap) return 0;
+    let count = 0;
+    for (const [key, info] of Object.entries(epMap)) {
+      if (info && info.played) {
+        watchedSet.add(key);
+        count++;
+      } else if (info && info.played === false) {
+        watchedSet.delete(key);
+      }
+      if (info && info.fav) {
+        favSet.add(key);
+      }
+    }
+    saveSet('sp_watched', watchedSet);
+    saveSet('sp_favs', favSet);
+    return count;
+  }
+
+  if (JF && JF.onWatchedSync) {
+    JF.onWatchedSync((epMap) => {
+      applyJellyfinWatchedToLocal(epMap);
+      applyFilters();
+      if (activeModalEp) updateModalActionButtons();
+    });
   }
 
   function renderModalCastPanel() {
@@ -2113,6 +2149,7 @@
     document.getElementById('jfPassLabel').textContent = t.jfPassLabel;
     document.getElementById('jfKeyLabel').textContent = t.jfKeyLabel;
     document.getElementById('jfConnectBtn').textContent = t.jfConnectBtn;
+    document.getElementById('jfSyncWatchedText').textContent = t.jfSyncWatchedBtn;
     document.getElementById('jfDisconnectBtn').textContent = t.jfDisconnectBtn;
     document.getElementById('jfTargetTvLabel').textContent = t.jfTargetTvLabel;
     document.getElementById('jfRefreshBtnText').textContent = t.jfRefreshBtn;
@@ -2348,9 +2385,14 @@
         else favSet.add(key);
         saveSet('sp_favs', favSet);
       } else if (actBtn.dataset.act === 'watch') {
-        if (watchedSet.has(key)) watchedSet.delete(key);
-        else watchedSet.add(key);
+        const nowWatched = !watchedSet.has(key);
+        if (nowWatched) watchedSet.add(key);
+        else watchedSet.delete(key);
         saveSet('sp_watched', watchedSet);
+        const ep = DATA.find(x => epKey(x) === key);
+        if (ep && JF && JF.jfConfig.connected) {
+          JF.setEpisodeWatchedOnJellyfin(ep, nowWatched).catch(() => {});
+        }
       }
       applyFilters();
       return;
@@ -2460,9 +2502,10 @@
         apiKey: document.getElementById('jfKeyInput').value
       });
       const epCount = Object.keys(cfg.episodeMap || {}).length;
+      const watchedCnt = applyJellyfinWatchedToLocal(cfg.episodeMap);
       const tvCount = JF.getActiveSessions().length;
       statusBox.className = 'cast-status show ok';
-      statusBox.textContent = t.jfConnectSuccess(cfg.serverName || 'Jellyfin', epCount, tvCount);
+      statusBox.textContent = t.jfConnectSuccess(cfg.serverName || 'Jellyfin', epCount, watchedCnt, tvCount);
       updateJfConnectionIndicators();
       applyFilters();
     } catch (err) {
@@ -2472,6 +2515,28 @@
     } finally {
       btn.disabled = false;
       btn.textContent = t.jfConnectBtn;
+    }
+  });
+
+  document.getElementById('jfSyncWatchedBtn').addEventListener('click', async () => {
+    if (!JF || !JF.jfConfig.connected) return;
+    const t = I18N[lang];
+    const statusBox = document.getElementById('jfSettingsStatus');
+    const syncBtn = document.getElementById('jfSyncWatchedBtn');
+    syncBtn.disabled = true;
+    try {
+      const epMap = await JF.syncSouthParkEpisodes();
+      const watchedCnt = applyJellyfinWatchedToLocal(epMap);
+      const totalCnt = Object.keys(epMap || {}).length;
+      statusBox.className = 'cast-status show ok';
+      statusBox.textContent = t.jfSyncWatchedDone(watchedCnt, totalCnt);
+      updateJfConnectionIndicators();
+      applyFilters();
+    } catch (err) {
+      statusBox.className = 'cast-status show err';
+      statusBox.textContent = err.message || String(err);
+    } finally {
+      syncBtn.disabled = false;
     }
   });
 
@@ -2613,9 +2678,13 @@
   document.getElementById('modalWatchBtn').addEventListener('click', () => {
     if (!activeModalEp) return;
     const key = epKey(activeModalEp);
-    if (watchedSet.has(key)) watchedSet.delete(key);
-    else watchedSet.add(key);
+    const nowWatched = !watchedSet.has(key);
+    if (nowWatched) watchedSet.add(key);
+    else watchedSet.delete(key);
     saveSet('sp_watched', watchedSet);
+    if (JF && JF.jfConfig.connected) {
+      JF.setEpisodeWatchedOnJellyfin(activeModalEp, nowWatched).catch(() => {});
+    }
     updateModalActionButtons();
     applyFilters();
   });
@@ -2693,6 +2762,10 @@
   // Initial Render
   updateJfConnectionIndicators();
   if (JF && JF.jfConfig.connected) {
+    if (JF.jfConfig.episodeMap) {
+      applyJellyfinWatchedToLocal(JF.jfConfig.episodeMap);
+    }
+    JF.syncSouthParkEpisodes().catch(() => {});
     JF.refreshSessions().then(populateTvDropdowns).catch(() => {});
   }
   renderFilterControls();
