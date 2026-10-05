@@ -1,19 +1,53 @@
 {
-  "name": "South Park Folgen-Finder",
-  "short_name": "Folgen-Finder",
-  "description": "Suche South-Park-Folgen nach Figuren, Running Gags und Memes.",
-  "start_url": "./index.html",
+  "id": "./",
+  "name": "South Park Folgen-Finder / Episode Finder",
+  "short_name": "SP Finder",
+  "description": "Suche South-Park-Folgen nach Hauptfiguren, Staffeln, Running Gags und Memes (DE / EN).",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#eef4f8",
   "theme_color": "#5a9fcf",
+  "dir": "ltr",
   "lang": "de",
+  "categories": ["entertainment", "reference"],
   "icons": [
-    { "src": "icons/favicon-16.png", "sizes": "16x16", "type": "image/png" },
-    { "src": "icons/favicon-32.png", "sizes": "32x32", "type": "image/png" },
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }
